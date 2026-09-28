@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 grep -Eiq 'clean_phone|leads' "$FINAL"; check "Final message mentions the duplicated normalization" $? "$(grep -Eio '.{0,60}(clean_phone|leads).{0,60}' "$FINAL" | head -1)"
 copies=$(grep -rlE '593' app --include='*.py' | sort | tr '\n' ' ')

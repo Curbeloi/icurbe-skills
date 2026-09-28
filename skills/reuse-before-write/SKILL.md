@@ -7,9 +7,10 @@ description: >
   repository that already has code, even if the task looks small or urgent.
   This includes making failing tests pass, fixing a crash or an error message,
   and requests written in any language. Load it before the first edit.
-  Forces a search for existing functionality to reuse, root-cause
-  identification before fixing, and a diff audit for duplication, symptom
-  patches and dead code before declaring the task done.
+  Forces a search for existing functionality to reuse (by name and by
+  behaviour, so features do not overlap), root-cause identification before
+  fixing, and a diff audit for duplication, overlap, symptom patches and dead
+  code before declaring the task done.
 ---
 
 # Reuse Before Write
@@ -17,8 +18,10 @@ description: >
 Generating code is cheap; understanding a codebase is not. That asymmetry pushes agents into two
 failures that compound over time:
 
-1. **Duplication**: a new `dateToString` next to the existing `formatDate`, a `utils2.ts`, a second
-   HTTP client, a dependency that does what an installed one already does.
+1. **Duplication and overlap**: a new `dateToString` next to the existing `formatDate`, a
+   `utils2.ts`, a second HTTP client, a dependency that does what an installed one already does,
+   or a whole feature (a scheduler, a cache, a PDF renderer) that already exists under another name
+   and in another shape.
 2. **Symptom patches**: a `try/catch` that swallows the error, an `if (x == null) return 0`, a
    default value or a retry that hides corrupt state, a test edited until it passes.
 
@@ -63,15 +66,29 @@ The goal is to learn what already exists before deciding what is missing.
    leads: open the promising ones and read what they actually do. Look *inside* them too: the
    logic you need is often embedded in a bigger function under another name (a check digit
    inside `validateTaxId`, a date format inside `renderReport`).
-4. **Check the usual homes of shared code**: `utils`, `helpers`, `lib`, `common`, `shared`, `core`,
+4. **Search by behaviour, not only by name.** Names are the weakest signal: the existing code that
+   already does what you need often has a name you would never guess. Write down what you are
+   about to build as observable behaviour: what it **produces** (a formatted label, a file, a
+   computed number), what **effect** it has (sends a message, writes a row, caches, calls an
+   API, validates an id) and which **primitives** it would use (`Intl.RelativeTimeFormat`,
+   `fetch`, `preg_match`, `imagecopyresampled`, the DB client, the queue). Search for those
+   primitives and effects:
+   ```bash
+   bash <skill-dir>/scripts/find-similar.sh RelativeTimeFormat fetch thumbnail
+   ```
+   Code that already uses the same primitives to produce the same output or effect is an
+   overlap candidate whatever it is called. This applies to whole features too: a second job
+   queue, another cache, another HTTP client, or new code that calls a low-level transport or
+   driver directly instead of the module that wraps it, is the same failure at a larger scale.
+5. **Check the usual homes of shared code**: `utils`, `helpers`, `lib`, `common`, `shared`, `core`,
    `services`, and the dependency manifest (`package.json`, `composer.json`, `Cargo.toml`,
    `requirements.txt`, `pyproject.toml`, `go.mod`). A library that is already installed beats a
    new one and beats hand-written code.
-5. **Find the callers** of the code you are about to touch (`grep -rn "symbolName("`, or your
+6. **Find the callers** of the code you are about to touch (`grep -rn "symbolName("`, or your
    editor's references). Callers tell you what must keep working and how wide the blast radius is.
-6. **Write the recon report** in the format of `references/recon-report-template.md`: what
-   exists, where, whether it is reusable, and what is really missing. Keep it short. It is a
-   decision record, not an essay.
+7. **Write the recon report** in the format of `references/recon-report-template.md`: what
+   exists, where, whether it is reusable, what **overlaps** with the behaviour you are about to
+   build, and what is really missing. Keep it short. It is a decision record, not an essay.
 
 Why the report: writing "Found: `src/utils/money.ts:formatCurrency` (reusable: yes)" makes it
 hard to then write a second currency formatter. The report is how the recon changes the code.
@@ -98,7 +115,13 @@ the input can legitimately be absent (user input, an external API). Say which ca
 
 ## Phase 3: Explicit decision
 
-Pick exactly one option, in this order of preference, and justify it in one line:
+First answer one question: **does anything in the repository already produce this output or
+this effect, for any caller?** If yes, that is what you reuse, extend or unify, even when its
+code looks nothing like what you would write. Two features that do the same thing in different
+ways are worse than two copies of the same code: nobody notices they are duplicates, and they
+drift apart silently.
+
+Then pick exactly one option, in this order of preference, and justify it in one line:
 
 1. **Reuse** what exists as-is.
 2. **Extend** what exists (a parameter, a new case, an overload) without breaking its callers.
@@ -133,16 +156,22 @@ bash <skill-dir>/scripts/audit-diff.sh main     # or against a base ref
 It lists new files; new definitions that repeat within the change, share a name with existing
 code, or look like it (`(weak)` = one word in common); new symbols nothing references; added
 `try/catch`, fallbacks and suppressions; touched tests (removed assertions, skips); manifest
-changes; added code lines that already exist elsewhere in the repository; and copy-paste blocks
-when `jscpd` is installed. **RED** marks what is almost always a
+changes; new definitions that call the same operations as an existing one (possible functional
+overlap); added code lines that already exist elsewhere, verbatim or with only the names changed;
+and copy-paste blocks when `jscpd` is installed. **RED** marks what is almost always a
 problem (swallowed errors, suppressions, weakened or skipped tests, cloned blocks); **YELLOW** marks
-what needs a one-line justification. The script only informs and never fails, and name matching is
-a heuristic: read the flagged code before you act on it. Then answer this checklist honestly:
+what needs a one-line justification. The script only informs and never fails, and every match is
+a heuristic: read the flagged code before you act on it. A clean audit does not prove there is no
+overlap (two implementations can share no name, no line and no operation), so the first
+checklist item is yours to answer. Then answer this checklist honestly:
 
+- [ ] **Functional overlap**: does anything you added do what another part of the code already
+      does, even with different code, names or libraries? If yes: reuse, extend or unify. If you
+      keep both, say so in the final summary and say why.
 - [ ] **New files**: is each one justified by the Phase 3 decision?
 - [ ] **New functions/classes**: does any have a name or signature similar to an existing one?
 - [ ] **Copied logic**: does any new body repeat a loop, formula or regex from code you read in
-      Phase 1? Compare bodies, not names; the audit's section 6 lists verbatim copied lines.
+      Phase 1? Compare bodies, not names; the audit lists copied lines, including renamed copies.
 - [ ] **Fallbacks**: did you add `try/catch`, `except`, `??`, `|| default`, `unwrap_or`, default
       values or special-case `if`s? For each: does it fix the cause, or hide the symptom?
 - [ ] **Tests**: did you modify a test? If so, was the test wrong (say why), or was it adjusted
@@ -172,6 +201,7 @@ Audit: <"clean", or the flagged items and what you did about them>
 - You are about to create a file whose name ends in `2`, `new`, `v2`, `_fixed`, `helper`, `utils`
   in a project that already has one.
 - You are writing a function whose name you have not searched for.
+- You are building something whose output or effect you have not searched for (only its name).
 - You are adding `npm install` / `composer require` / `cargo add` without checking the manifest.
 - You are wrapping a call in `try/catch` because "it sometimes fails".
 - You are editing a test's expected value right after the test failed.

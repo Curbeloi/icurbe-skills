@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 git add -A -N . >/dev/null 2>&1
 csv=$(git diff "$BASE_REF" --name-only | grep -v '^tests/' | grep '\.py$' | xargs grep -il 'csv' 2>/dev/null | tr '\n' ' ')

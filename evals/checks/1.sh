@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 grep -q 'formatCurrency' src/views/invoiceView.ts; check "src/views/invoiceView.ts calls formatCurrency" $? "$(grep -n formatCurrency src/views/invoiceView.ts | head -2 | tr '\n' ' ')"
 new_fmt=$(git add -A -N . && git diff "$BASE_REF" --name-only | grep -v '^src/utils/money.ts$' | while read -r f; do

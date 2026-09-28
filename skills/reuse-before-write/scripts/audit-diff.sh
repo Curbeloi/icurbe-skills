@@ -245,11 +245,126 @@ else
   done < "$TMP/manifests"
 fi
 
-# ---------------------------------------------------------------- 6. copied lines
+# ---------------------------------------------------------------- 6. functional overlap
+# Two implementations of the same feature rarely share a name or a line, but they tend to call
+# the same things (Intl.NumberFormat + format, getDay + setDate, preg_match + substr). The body
+# of a definition is approximated as its lines up to the next definition in the same file; its
+# fingerprint is the set of functions and methods it calls, minus keywords and trivial calls.
+section "6. Possible functional overlap: new code that does what existing code does, or goes around it"
+if [ ! -s "$TMP/newdefs" ]; then
+  echo "  none"
+else
+  sort -u "$TMP/newdefs" "$TMP/alldefs" > "$TMP/defs.all"
+  # shellcheck disable=SC2016  # the $ are awk fields and regexes, not shell expansions
+  awk -F'\t' '{ sub(/:[0-9]+$/, "", $2); print $2 }' "$TMP/defs.all" | sort -u | tr '\n' '\0' \
+    | LC_ALL=C xargs -0 awk -F'\t' '
+    BEGIN {
+      k = split("if for foreach while switch catch function return typeof sizeof elseif array list isset empty unset echo print match fn def class new await async super constructor require require_once include include_once use import from and or not in is lambda with assert expect describe it test push pop shift unshift map filter reduce forEach some every find findIndex includes indexOf join split slice splice concat keys values entries toString valueOf trim toLowerCase toUpperCase replace log error warn info debug then resolve reject String Number Boolean Array Object Promise Error Map Set Date parseInt parseFloat isNaN get set has add delete clear sort len str int float bool count strlen is_array is_string is_null in_array array_map array_filter array_keys array_values array_merge implode explode sprintf printf intval floatval strval trim json_encode json_decode range append extend format_string", w, " ")
+      for (i = 1; i <= k; i++) skip[w[i]] = 1
+    }
+    FILENAME == ARGV[1] { n = split($2, a, ":"); p = substr($2, 1, length($2) - length(a[n]) - 1); start[p, a[n]] = $1; next }
+    FNR == 1 { cur = "" }
+    {
+      if ((FILENAME, FNR) in start) { cur = FILENAME ":" FNR; name[cur] = start[FILENAME, FNR]; order[++nd] = cur }
+      if (cur == "" || $0 ~ /^[[:space:]]*(\/\/|#|\*|\/\*)/) next
+      t = $0; gsub(/"([^"\\]|\\.)*"|'\''([^'\''\\]|\\.)*'\''/, "S", t)
+      # Method calls (after . -> ::) are recorded as ".name", plain calls as "name".
+      while (match(t, /[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\(/)) {
+        tok = substr(t, RSTART, RLENGTH); before = substr(t, 1, RSTART - 1); t = substr(t, RSTART + RLENGTH)
+        sub(/[[:space:]]*\($/, "", tok)
+        if (tok ~ /^\$/ || (tok in skip) || tok == name[cur]) continue
+        if (before ~ /(\.|->|::)[[:space:]]*$/) tok = "." tok
+        if ((cur, tok) in seen) continue
+        seen[cur, tok] = 1; ops[cur] = ops[cur] " " tok
+      }
+    }
+    END { for (i = 1; i <= nd; i++) { c = order[i]; print name[c] "\t" c "\t" substr(ops[c], 2) } }' \
+    "$TMP/defs.all" 2>/dev/null > "$TMP/ops"
+  # Only rare operations count: a call that many definitions make (useState, isinstance, getattr,
+  # a framework's DI helper) says nothing about what the code is for. Rare = made by at most
+  # max(8, definitions / 300) definitions. For each new definition with 2+ rare operations:
+  # existing definitions that share at least 2 of them and at least half of the new one's.
+  # Callers of the new code, code the new definition delegates to, and calls to anything this
+  # change defines are reuse, not overlap.
+  awk -F'\t' '
+    FNR == 1 { pass++; if (pass == 3) rare = (nd / 300 > 8) ? nd / 300 : 8 }
+    pass == 1 { isnew[$2] = 1; newname[$1] = 1; next }
+    pass == 2 { nd++; k = split($3, o, " "); for (i = 1; i <= k; i++) df[o[i]]++; next }
+    {
+      k = split($3, o, " "); r = ""; c = 0
+      for (i = 1; i <= k; i++) { b = o[i]; sub(/^\./, "", b); if (df[o[i]] <= rare && !(b in newname)) { r = r " " o[i]; c++ } }
+      if ($2 in isnew) { if (c >= 2) { nn++; nname[nn] = $1; nloc[nn] = $2; nk[nn] = c; split(substr(r, 2), o, " "); for (i = 1; i <= c; i++) nop[nn, o[i]] = 1 } }
+      else if (c >= 2) { on++; oname[on] = $1; oloc[on] = $2; olist[on] = r " "; ok[on] = c; oall[on] = " " $3 " " }
+    }
+    END {
+      for (j = 1; j <= nn; j++) for (i = 1; i <= on; i++) {
+        if (oname[i] == nname[j] || ((j, oname[i]) in nop) || ((j, "." oname[i]) in nop) || index(oall[i], " " nname[j] " ") || index(oall[i], " ." nname[j] " ")) continue
+        m = split(substr(olist[i], 2), o, " "); shared = 0; list = ""
+        for (x = 1; x <= m; x++) if ((j, o[x]) in nop) { shared++; b = o[x]; sub(/^\./, "", b); list = list (list == "" ? "" : ", ") b }
+        if (shared >= 2 && 2 * shared >= nk[j])
+          printf "%s\t%s\t%d\t%d\t%d\t%s\t%s\t%s\n", nname[j], nloc[j], shared, nk[j], ok[i], oname[i], oloc[i], list
+      }
+    }' "$TMP/newdefs" "$TMP/ops" "$TMP/ops" | sort -t "$(printf '\t')" -k2,2 -k3,3nr > "$TMP/overlap"
+  # A second way into an existing feature: new code outside a module calling a function that,
+  # until now, only that module used (a transport, a driver, a repository behind a service).
+  # The module is the deepest directory holding the definition and all its existing callers.
+  # Only plain calls count (a method call cannot be tied to a definition by name), and shared-
+  # code homes (utils, lib, shared...) are meant to be used from anywhere.
+  awk -F'\t' '
+    function dir(loc,   d) { d = loc; sub(/:[0-9]+$/, "", d); if (!sub(/\/[^\/]*$/, "", d)) d = "."; return d }
+    function common(a, b,   x, y, n, i, out) {
+      n = split(a, x, "/"); split(b, y, "/"); out = ""
+      for (i = 1; i <= n && x[i] == y[i]; i++) out = out (out == "" ? "" : "/") x[i]
+      return out
+    }
+    FNR == 1 { pass++ }
+    pass == 1 { isnew[$2] = 1; newname[$1] = 1; next }
+    pass == 2 { ndef[$1]++; site[$1] = $2; next }
+    {
+      k = split($3, o, " ")
+      if ($2 in isnew) { for (i = 1; i <= k; i++) if (o[i] !~ /^\./ && !(o[i] in newname)) { nc++; cname[nc] = $1; cloc[nc] = $2; cop[nc] = o[i] } }
+      else for (i = 1; i <= k; i++) { m = o[i]; callers[m] = callers[m] " " $2; ncall[m]++; if (!((m, $1) in cn)) { cn[m, $1] = 1; cnames[m] = cnames[m] (cnames[m] == "" ? "" : ", ") $1 } }
+    }
+    END {
+      for (j = 1; j <= nc; j++) {
+        x = cop[j]; if (ndef[x] != 1 || !(x in ncall) || ((cloc[j], x) in done)) continue
+        done[cloc[j], x] = 1
+        mod = dir(site[x]); n = split(callers[x], cl, " ")
+        for (i = 1; i <= n; i++) mod = common(mod, dir(cl[i]))
+        np = split(mod, parts, "/"); if (np < 2 || tolower(parts[np]) ~ /^(utils?|helpers?|libs?|common|shared|core|support|tools|infra(structure)?)$/) continue
+        me = dir(cloc[j]); if (me == mod || index(me "/", mod "/") == 1) continue
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n", cname[j], cloc[j], x, mod, cnames[x], site[x]
+      }
+    }' "$TMP/newdefs" "$TMP/alldefs" "$TMP/ops" > "$TMP/bypass"
+  # Same name is not same function: keep a bypass only when the new file mentions the defining
+  # module (its import).
+  while IFS="$(printf '\t')" read -r id where fn mod users defsite; do
+    stem=${defsite%:*}; stem=${stem##*/}; stem=${stem%.*}
+    grep -q -- "$stem" "${where%:*}" 2>/dev/null && printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$where" "$fn" "$mod" "$users"
+  done < "$TMP/bypass" | head -n "$MAX_ITEMS" > "$TMP/bypass.top"
+  if [ -s "$TMP/overlap" ] || [ -s "$TMP/bypass.top" ]; then
+    # Loops read files, not pipes: a piped loop runs in a subshell and its flags would not count.
+    while IFS="$(printf '\t')" read -r id where fn mod users; do
+      yellow "$id ($where) calls $fn, which until now only $mod/ used ($users); does $mod/ already offer this feature through a higher-level entry point?"
+    done < "$TMP/bypass.top"
+    cut -f1,2 "$TMP/overlap" | uniq | head -n "$MAX_ITEMS" > "$TMP/overlap.top"
+    while IFS="$(printf '\t')" read -r id where; do
+      strong=$(awk -F'\t' -v at="$where" '$2 == at && $3 >= 4 && $3 * 10 >= $4 * 7 && $3 * 10 >= $5 * 7' "$TMP/overlap" | head -n 1)
+      msg="$id ($where) calls the same operations as existing code; same feature? read both, then reuse, extend or unify:"
+      if [ -n "$strong" ]; then red "$msg"; else yellow "$msg"; fi
+      awk -F'\t' -v at="$where" '$2 == at { printf "      %s  %s  (shares %d of its %d uncommon calls: %s)\n", $6, $7, $3, $4, $8 }' "$TMP/overlap" | head -n 3
+    done < "$TMP/overlap.top"
+  else
+    echo "  none"
+  fi
+fi
+
+# ---------------------------------------------------------------- 7. copied lines
 # Name checks miss a copied algorithm under a new name. Look for added code lines that already
-# exist verbatim (whitespace aside) elsewhere in the repository. Trivial lines and boilerplate
-# found in many files (imports, declare(strict_types=1), closing braces) do not count.
-section "6. Added code that already exists elsewhere: extract and reuse instead of copying?"
+# exist verbatim (whitespace aside) elsewhere in the repository, and then for renamed copies.
+# Trivial lines and boilerplate found in many files (imports, declare(strict_types=1), closing
+# braces) do not count.
+section "7. Added code that already exists elsewhere, verbatim or renamed: extract and reuse instead of copying?"
 awk -F'\t' '
   { t = $3; gsub(/[[:space:]]+/, " ", t); sub(/^ /, "", t); sub(/ $/, "", t) }
   length(t) < 18 { next }
@@ -277,17 +392,115 @@ if [ -s "$TMP/added.norm" ]; then
     END { for (k in pair) if (pair[k] >= 3) print pair[k] "\t" k }' "$TMP/seen" "$TMP/added.norm" \
     | sort -t "$(printf '\t')" -k1,1nr > "$TMP/copied"
 fi
-if [ -s "$TMP/copied" ]; then
+touch "$TMP/copied"
+
+# Renamed copies: the same code with other variable names, or reformatted. Compare token
+# sequences where variables, numbers and strings are replaced by placeholders; keywords,
+# operators and the names of called functions and methods stay. A run of SHINGLE equal tokens
+# is a match, and only runs with some logic in them count (at least LOGIC arithmetic,
+# comparison or boolean operators): declarations, types and markup look alike everywhere.
+# Only files with the same kind of extension as the changed code are read.
+SHINGLE=25
+LOGIC=3
+# shellcheck disable=SC2016  # the $ are awk fields and regexes, not shell expansions
+TOKENS_AWK='
+  BEGIN {
+    k = split("if else elif elseif for foreach while do switch case default break continue return function fn def func class interface trait struct enum new true false null nil None True False const let var val public private protected static final readonly abstract async await yield try catch except finally throw throws raise as in of instanceof typeof import export from use namespace extends implements self this parent super and or not is echo print lambda with pass match impl mut pub where", w, " ")
+    for (i = 1; i <= k; i++) KW[w[i]] = 1
+  }
+  # toks(line): the normalized tokens of one line in T[1..n]; returns n. A name stays as it is
+  # when it is called (followed by "(") or is a member (after . -> :: ?.); otherwise it is I.
+  # INTPL is set while inside a template literal that spans lines; reset it for every file.
+  function toks(s,   n, x, r) {
+    n = 0
+    if (INTPL) { if (!match(s, /`/)) return 0; s = substr(s, RSTART + 1); INTPL = 0 }
+    if (s ~ /^[[:space:]]*(\/\/|#|\*|\/\*|<!--)/) return 0
+    gsub(/"([^"\\]|\\.)*"|'\''([^'\''\\]|\\.)*'\''|`[^`]*`/, " \001 ", s)
+    if (match(s, /`/)) { s = substr(s, 1, RSTART - 1); INTPL = 1 }
+    sub(/[[:space:]]\/\/.*$/, "", s); gsub(/\/\*([^*]|\*+[^*\/])*\*+\//, " ", s)
+    # JS regex literals (after ( , = : ! & | ?): their * + ? are not arithmetic.
+    while (match(s, /[(,=:!&|?][[:space:]]*\/([^\/\\*[:space:]]|\\.)([^\/\\]|\\.)*\/[a-z]*/))
+      s = substr(s, 1, RSTART) " \001 " substr(s, RSTART + RLENGTH)
+    while (s != "") {
+      if (match(s, /^[[:space:]]+/)) { s = substr(s, RLENGTH + 1); continue }
+      if (match(s, /^[$]?[A-Za-z_][A-Za-z0-9_]*/)) {
+        x = substr(s, 1, RLENGTH); r = substr(s, RLENGTH + 1); sub(/^[[:space:]]+/, "", r)
+        T[++n] = (x in KW || substr(r, 1, 1) == "(" || (n > 1 && T[n - 1] ~ /^(\.|->|::|\?\.)$/)) ? x : "I"
+      }
+      else if (match(s, /^[0-9][0-9._xXa-fA-F]*/)) T[++n] = "N"
+      else if (match(s, /^(===|!==|==|!=|<=|>=|=>|->|::|\?\.|\?:|<\/|\/>|&&|\|\||\+\+|--|\+=|-=|\*=|\/=|%=|\?\?|<<|>>)/)) T[++n] = substr(s, 1, RLENGTH)
+      else { RLENGTH = 1; T[++n] = substr(s, 1, 1) }
+      s = substr(s, RLENGTH + 1)
+    }
+    return n
+  }'
+# Shingles of the added code, one run per block of consecutive added lines, keeping those with
+# enough logic in them: shingle<TAB>path<TAB>index
+LC_ALL=C awk -F'\t' -v K="$SHINGLE" -v L="$LOGIC" "$TOKENS_AWK"'
+  BEGIN { k = split("+ - * / % <= >= == === != !== && || ? += -= *= /= %= ++ -- ?? and or not in is", w, " "); for (i = 1; i <= k; i++) OP[w[i]] = 1 }
+  {
+    if ($1 != pf) INTPL = 0
+    if ($1 != pf || $2 != pl + 1) { cnt = 0; sh = ""; p = 0; lc = 0 }
+    pf = $1; pl = $2; n = toks($3)
+    for (i = 1; i <= n; i++) {
+      tn[$1]++; p++; F[p] = (T[i] in OP); lc += F[p]; if (p > K) lc -= F[p - K]
+      if (cnt < K) { sh = (cnt ? sh " " : "") T[i]; cnt++ } else sh = substr(sh, index(sh, " ") + 1) " " T[i]
+      if (cnt == K && lc >= L) print sh "\t" $1 "\t" tn[$1]
+    }
+  }' "$TMP/added.code" > "$TMP/shingles"
+if [ -s "$TMP/shingles" ]; then
+  LC_ALL=C cut -f2 "$TMP/shingles" | LC_ALL=C sed -n 's/.*\.\([A-Za-z0-9]*\)$/\1/p' | sort -u > "$TMP/exts"
+  grep -qxE 'ts|tsx|js|jsx|mjs|cjs|vue|svelte' "$TMP/exts" && printf '%s\n' ts tsx js jsx mjs cjs vue svelte >> "$TMP/exts"
+  [ -s "$TMP/repo.files" ] || rbw_list_files > "$TMP/repo.files"
+  awk 'FILENAME == ARGV[1] { ext[$0] = 1; next } { e = $0; sub(/.*\./, "", e) } (e in ext) && $0 !~ ENVIRON["TEST_RE"] && $0 !~ ENVIRON["NOISE_RE"]' \
+    "$TMP/exts" "$TMP/repo.files" > "$TMP/code.files"
+  # Where each added shingle also appears. A window that contains an added token is the change
+  # itself, not a source.
+  # shellcheck disable=SC2016  # the $ are awk fields, not shell expansions
+  tr '\n' '\0' < "$TMP/code.files" | LC_ALL=C xargs -0 awk -F'\t' -v K="$SHINGLE" "$TOKENS_AWK"'
+    FILENAME == ARGV[1] { want[$1] = 1; next }
+    FILENAME == ARGV[2] { here[$1 ":" $2] = 1; next }
+    FNR == 1 { tn = 0; cnt = 0; sh = ""; lastadd = -K; INTPL = 0 }
+    {
+      isadd = ((FILENAME ":" FNR) in here); n = toks($0)
+      for (i = 1; i <= n; i++) {
+        tn++; if (isadd) lastadd = tn
+        if (cnt < K) { sh = (cnt ? sh " " : "") T[i]; cnt++ } else sh = substr(sh, index(sh, " ") + 1) " " T[i]
+        if (cnt == K && tn - lastadd >= K && (sh in want) && !((sh, FILENAME) in out)) { out[sh, FILENAME] = 1; print sh "\t" FILENAME }
+      }
+    }' "$TMP/shingles" "$TMP/added.code" 2>/dev/null > "$TMP/shseen"
+  # Drop boilerplate shingles (in more than 3 files), then count, per changed file and source
+  # file, how many added tokens are covered by a matching shingle. Pairs already reported as
+  # verbatim copies are skipped.
+  awk -F'\t' -v K="$SHINGLE" '
+    FILENAME == ARGV[1] { reported[$2 "\t" $3] = 1; next }
+    FILENAME == ARGV[2] { if (!(($1, $2) in f)) { f[$1, $2] = 1; nf[$1]++; src[$1] = src[$1] "\n" $2 } next }
+    ($1 in nf) && nf[$1] <= 3 {
+      m = split(src[$1], s, "\n")
+      for (x = 2; x <= m; x++) {
+        pr = $2 "\t" s[x]; if (pr in reported) continue
+        for (i = $3 - K + 1; i <= $3; i++) if (!((pr, i) in cov)) { cov[pr, i] = 1; ntok[pr]++ }
+      }
+    }
+    END { for (pr in ntok) print ntok[pr] "\t" pr }' "$TMP/copied" "$TMP/shseen" "$TMP/shingles" \
+    | sort -t "$(printf '\t')" -k1,1nr > "$TMP/renamed"
+fi
+touch "$TMP/renamed"
+if [ -s "$TMP/copied" ] || [ -s "$TMP/renamed" ]; then
   while IFS="$(printf '\t')" read -r n changed from; do
     msg="$changed: $n added lines already exist in $from; extract the shared code and call it from both"
     if [ "$n" -ge 6 ]; then red "$msg"; else yellow "$msg"; fi
   done < "$TMP/copied"
+  while IFS="$(printf '\t')" read -r n changed from; do
+    msg="$changed: about $n tokens of added code have the same structure as code in $from (names changed); extract the shared code and call it from both"
+    if [ "$n" -ge $((SHINGLE * 2)) ]; then red "$msg"; else yellow "$msg"; fi
+  done < "$TMP/renamed"
 else
   echo "  none"
 fi
 
-# ---------------------------------------------------------------- 7. copy-paste (jscpd)
-section "7. Copy-paste between the changed files (jscpd)"
+# ---------------------------------------------------------------- 8. copy-paste (jscpd)
+section "8. Copy-paste between the changed files (jscpd)"
 JSCPD=''
 if [ -x node_modules/.bin/jscpd ]; then JSCPD=node_modules/.bin/jscpd
 elif command -v jscpd >/dev/null 2>&1; then JSCPD=jscpd; fi

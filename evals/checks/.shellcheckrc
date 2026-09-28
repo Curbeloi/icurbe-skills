@@ -1,0 +1,4 @@
+# The checks use one idiom on purpose: run a test command, then `check "<expectation>" $? "<evidence>"`.
+# SC2319/SC2181: that $? is the test's result, read right away.
+# SC2016: the single-quoted strings are PHP, JS and Python programs, not shell.
+disable=SC2319,SC2181,SC2016

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 git add -A -N . >/dev/null 2>&1
 git diff --quiet "$BASE_REF" -- test/; check "test/ is unchanged" $? "$(git diff "$BASE_REF" --stat -- test/ | tail -1)"

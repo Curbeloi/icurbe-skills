@@ -8,5 +8,15 @@ bad()  { printf 'FAIL\t%s\t%s\n' "$1" "${2:-}"; }
 check() { if [ "$2" = 0 ]; then ok "$1" "$3"; else bad "$1" "$3"; fi; }
 # Lines added to FILE(S) since the fixture commit (untracked files count as added).
 added() { git add -A -N . >/dev/null 2>&1; git diff "$BASE_REF" -U0 -- "$@" | grep -E '^\+[^+]' | cut -c2-; }
-node_tests() { node --test test/*.test.ts >/tmp/rbw-eval-node.$$ 2>&1; r=$?; tail -n 8 /tmp/rbw-eval-node.$$ | grep -E '^ℹ (pass|fail)' | tr '\n' ' '; rm -f /tmp/rbw-eval-node.$$; return $r; }
-py_tests() { python3 -m unittest >/tmp/rbw-eval-py.$$ 2>&1; r=$?; tail -n 1 /tmp/rbw-eval-py.$$; rm -f /tmp/rbw-eval-py.$$; find . -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null; return $r; }
+node_tests() {
+  local log r
+  log=$(mktemp "${TMPDIR:-/tmp}/rbw-eval-node.XXXXXX")
+  node --test test/*.test.ts > "$log" 2>&1; r=$?
+  tail -n 8 "$log" | grep -E '^ℹ (pass|fail)' | tr '\n' ' '; rm -f "$log"; return $r
+}
+py_tests() {
+  local log r
+  log=$(mktemp "${TMPDIR:-/tmp}/rbw-eval-py.XXXXXX")
+  python3 -m unittest > "$log" 2>&1; r=$?
+  tail -n 1 "$log"; rm -f "$log"; find . -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null; return $r
+}

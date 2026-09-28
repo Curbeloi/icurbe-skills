@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 grep -q 'business_days_between' app/orders/report.py; check "app/orders/report.py calls business_days_between" $? "$(grep -n business_days_between app/orders/report.py | head -2 | tr '\n' ' ')"
 loop=$(git add -A -N . && git diff "$BASE_REF" --name-only -- app | grep -v '^app/utils/dates.py$' | while read -r f; do

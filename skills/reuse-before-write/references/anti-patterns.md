@@ -11,6 +11,7 @@ Contents:
 5. Fallback that hides corrupt data
 6. Redundant dependency
 7. Copy-paste with a small variation instead of a parameter
+8. Same feature, different implementation
 
 ---
 
@@ -200,3 +201,48 @@ async function getJson<T>(path: string): Promise<T> {
 export const getUsers = () => getJson<User[]>("/users");
 export const getOrders = () => getJson<Order[]>("/orders");
 ```
+
+---
+
+## 8. Same feature, different implementation
+
+The most expensive duplicate shares no name, no line and no library with the original: it just
+does the same job. Nothing in a diff review flags it, the two versions give slightly different
+answers, and every later change has to be made twice by someone who knows both exist.
+
+**TypeScript: bad**
+```ts
+// src/tickets/TicketRow.tsx: a hand-made "time ago" label
+function ageLabel(created: Date): string {
+  const min = Math.floor((Date.now() - created.getTime()) / 60000);
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h`;   // English-only, no days
+}
+```
+**TypeScript: good**
+```ts
+import { formatElapsed } from "../shared/time/formatElapsed";   // i18n, days, "just now"
+const label = formatElapsed(ticket.createdAt);
+```
+
+**PHP: bad**
+```php
+// A new resize in the upload controller, while app/Media/Thumbnailer.php already makes
+// thumbnails with caching, EXIF rotation and a size whitelist.
+$img = imagecreatefromjpeg($path);
+imagecopyresampled($thumb, $img, 0, 0, 0, 0, 200, 200, $w, $h);
+```
+**PHP: good**
+```php
+$url = $this->thumbnailer->thumbnail($upload, Size::Small);   // one pipeline, one cache
+```
+
+A new caller that goes *around* an existing feature is the same failure: calling a low-level
+transport, driver or repository that only its own module used, instead of the module's entry
+point that adds the checks, retries and permissions.
+
+**How to catch it:** in Phase 1, search for the *behaviour* (the output, the effect, the
+primitives it would call: `Intl.RelativeTimeFormat`, `imagecopyresampled`), not only the name you
+have in mind. `audit-diff.sh` flags new definitions that call the same uncommon operations as an
+existing one, and new calls into another module's internals; but two implementations can share
+nothing at all, so the check that matters is the question "does anything here already produce
+this?".

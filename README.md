@@ -15,15 +15,20 @@ A lightweight guardrail that runs on **every** code change, feature or bug fix, 
 checkpoints:
 
 1. **Recon before writing**: search the repository for what already exists (helpers, services,
-   installed libraries, callers) and decide explicitly: *reuse → extend → refactor → create*.
-2. **Diff audit before "done"**: new files, new functions with similar existing names, added
-   `try/catch` / `??` / `unwrap_or` / suppressions, tests that were edited, new dependencies and
-   copy-pasted blocks.
+   installed libraries, callers), by name **and by behaviour** (what the new code would produce,
+   which effect it would have, which primitives it would call), and decide explicitly:
+   *reuse → extend → refactor → create*.
+2. **Diff audit before "done"**: new files, new functions with similar existing names, new code
+   that calls the same uncommon operations as existing code or goes around an existing module,
+   code copied verbatim or with renamed variables, added `try/catch` / `??` / `unwrap_or` /
+   suppressions, tests that were edited and new dependencies.
 
 **The problem it solves.** Generating code is cheaper than understanding it, so agents tend to
 duplicate functionality under a new name (`formatDate` next to `dateToString`, `utils2.ts`, a second
-HTTP client) and to patch symptoms (a `catch` that swallows the error, `?? 0`, a test edited until
-it passes). Each diff looks fine on its own; together they rot the codebase.
+HTTP client), to build a feature that already exists in another shape (a second way to send email
+next to the outbox that handles opt-outs and retries), and to patch symptoms (a `catch` that
+swallows the error, `?? 0`, a test edited until it passes). Each diff looks fine on its own;
+together they rot the codebase.
 
 ### Install
 
@@ -56,7 +61,7 @@ for the decision and the audit. Without it, it falls back to a short root-cause 
 ```
 skills/reuse-before-write/
 ├── SKILL.md                          # the 4-phase workflow
-├── references/anti-patterns.md       # 7 anti-patterns, bad/good, in PHP, TypeScript and Rust
+├── references/anti-patterns.md       # 8 anti-patterns, bad/good, in PHP, TypeScript and Rust
 ├── references/recon-report-template.md
 └── scripts/
     ├── find-similar.sh               # files, definitions and identifiers matching domain terms
@@ -82,9 +87,9 @@ logs skill loading.
 
 ### Evals
 
-`evals/` holds ten small fixture repositories, the same five scenarios in TypeScript/PHP and in
-Python, and a runner that executes each case with Claude Code, with and without the skill, and
-checks the result:
+`evals/` holds eleven fixture repositories (the same five scenarios in TypeScript/PHP and in
+Python, plus a larger TypeScript repository for feature overlap) and a runner that executes each
+case with Claude Code, with and without the skill, and checks the result:
 
 | Scenario | TypeScript / PHP | Python | Expected |
 |---|---|---|---|
@@ -93,10 +98,12 @@ checks the result:
 | Tempting test | 3: discount test fails on a real bug | 8: pagination test fails on an off-by-one | fix the code, not the test |
 | Existing duplicates | 4: two RUC validators, add cédula | 9: two phone normalizers, add suppliers | report or unify, no third copy |
 | Legitimately new | 5: CSV export | 10: CSV export (stdlib, no pandas) | build it, without friction |
+| Feature overlap | 11: ~30 files; an outbox with templates, opt-out and retries already sends email; the SMTP transport is the first hit for "send" | – | queue the email through the outbox; no second email channel |
 
 ```bash
-evals/run.sh                  # all cases, both variants; costs API usage
+evals/run.sh                        # all cases, both variants; costs API usage
 evals/run.sh --only 2,3
+evals/run.sh --only 11 --repeat 3   # three runs per variant, aggregated; --jobs caps parallelism
 ```
 
 Latest results, including what they do *not* show, are in [evals/RESULTS.md](evals/RESULTS.md).
@@ -120,17 +127,21 @@ Un guardarraíl ligero que actúa en **cada** cambio de código, sea una funcion
 dos puntos de control:
 
 1. **Reconocimiento antes de escribir**: busca en el repositorio lo que ya existe (utilidades,
-   servicios, librerías instaladas, callers) y obliga a decidir de forma explícita:
-   *reutilizar → extender → refactorizar → crear*.
+   servicios, librerías instaladas, callers), por nombre **y por comportamiento** (qué produciría
+   el código nuevo, qué efecto tendría, qué primitivas usaría), y obliga a decidir de forma
+   explícita: *reutilizar → extender → refactorizar → crear*.
 2. **Auditoría del diff antes de dar por terminado**: archivos nuevos, funciones nuevas con nombres
-   parecidos a otras existentes, `try/catch` / `??` / `unwrap_or` / supresiones añadidos, tests
-   modificados, dependencias nuevas y bloques copiados.
+   parecidos a otras existentes, código nuevo que hace las mismas operaciones poco comunes que otro
+   existente o que rodea un módulo existente, código copiado tal cual o con las variables
+   renombradas, `try/catch` / `??` / `unwrap_or` / supresiones añadidos, tests modificados y
+   dependencias nuevas.
 
 **El problema que resuelve.** Generar código es más barato que entenderlo, así que los agentes
 tienden a duplicar funcionalidades con otro nombre (`formatDate` junto a `dateToString`,
-`utils2.ts`, un segundo cliente HTTP) y a parchear síntomas (un `catch` que se traga el error,
-`?? 0`, un test retocado hasta que pasa). Cada diff parece correcto por separado; juntos degradan el
-código.
+`utils2.ts`, un segundo cliente HTTP), a construir una funcionalidad que ya existe con otra forma
+(una segunda vía para enviar correos junto al outbox que ya gestiona bajas y reintentos) y a
+parchear síntomas (un `catch` que se traga el error, `?? 0`, un test retocado hasta que pasa). Cada
+diff parece correcto por separado; juntos degradan el código.
 
 ### Instalación
 

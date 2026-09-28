@@ -43,3 +43,10 @@ swallowed error; `contextlib.suppress` and `pylint: disable` count as suppressio
 
 Next step to measure the effect on strong models: larger fixtures, where the helper to reuse is not
 in the first files an agent opens.
+
+Added after these runs, not measured yet: case 11 (feature overlap in a ~30-file TypeScript
+repository: an outbox with templates, opt-out and retries already sends email), `run.sh --repeat`,
+and three audit signals aimed at overlapping features rather than copied names: new code that
+calls the same uncommon operations as existing code, new calls into another module's internals,
+and copies with renamed variables. On a hand-written third copy of the case 4 check digit with
+every variable renamed, the audit now reports RED; before, it only showed a weak name match.

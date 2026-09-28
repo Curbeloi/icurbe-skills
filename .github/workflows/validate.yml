@@ -26,8 +26,8 @@ jobs:
           test ! -f SKILL.md || { echo "::error::no SKILL.md at the repository root"; exit 1; }
       - name: Shell scripts
         run: |
-          for f in skills/*/scripts/*.sh evals/run.sh; do bash -n "$f"; done
-          shellcheck -x -s bash skills/*/scripts/*.sh evals/run.sh
+          for f in skills/*/scripts/*.sh evals/run.sh evals/checks/*.sh; do bash -n "$f"; done
+          shellcheck -x -s bash skills/*/scripts/*.sh evals/run.sh evals/checks/*.sh
       - name: Scripts smoke test
         run: |
           cd evals/fixtures/1-ts-reuse-format-currency
@@ -44,3 +44,17 @@ jobs:
           printf 'def f(x):\n    try:\n        return int(x)\n    except ValueError:\n        pass\n' >> app/suppliers/service.py
           bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
           grep -q 'empty catch/except' audit.txt
+      - name: Scripts smoke test (overlap and renamed copies)
+        run: |
+          cd evals/fixtures/11-ts-feature-overlap-notifications
+          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
+          printf '%s\n' 'import { smtpSend } from "../platform/outbox/transports/smtp.ts";' \
+            'export function sendShippedEmail(to: string, n: string) { return smtpSend("x@y.z", to, "Shipped", n); }' > src/orders/shippedEmail.ts
+          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
+          grep -q 'which until now only src/platform/outbox/ used' audit.txt
+          cd ../4-php-unify-ruc-cedula
+          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
+          perl -pe 's/RucValidator/CedulaValidator/; s/validarRuc/validarCedula/; s/\$ruc\b/\$id/g; s/\$suma\b/\$total/g; s/\$d\b/\$v/g; s/\$i\b/\$k/g; s/\$provincia\b/\$prov/g; s/\$verificador\b/\$dv/g' \
+            src/Validation/RucValidator.php > src/Validation/CedulaValidator.php
+          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
+          grep -Eq 'same structure as code in src/Validation/RucValidator.php|already exist in src/Validation/RucValidator.php' audit.txt

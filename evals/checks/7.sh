@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR source=common.sh
 . "$(dirname "$0")/common.sh"
 grep -Eq 'utf-8-sig|utf_8_sig|\\ufeff|BOM_UTF8' app/importers/customers_csv.py; check "The importer handles the BOM" $? "$(added app/importers/customers_csv.py | head -3 | tr '\n' ' ')"
 guard=$(added app/notifications/welcome.py | grep -E 'if not|is None|is not None|or ""|or '"''"'|try:|except|getattr|\.get\(')

@@ -30,8 +30,9 @@ rbw_is_excluded() {
   return 1
 }
 
-# Every tracked or untracked-but-not-ignored file (or a find walk outside git), one per line,
-# relative to the current directory, without excluded directories.
+# Every tracked or untracked-but-not-ignored file that exists on disk (or a find walk outside
+# git), one per line, relative to the current directory, without excluded directories. Tracked
+# files deleted in the working tree are left out: awk aborts a whole batch on a missing file.
 rbw_list_files() {
   local prune d
   if rbw_in_git; then
@@ -41,7 +42,7 @@ rbw_list_files() {
     for d in $RBW_EXCLUDE_DIRS; do prune="$prune -name $d -o"; done
     # shellcheck disable=SC2086
     find . \( ${prune% -o} \) -prune -o -type f -print 2>/dev/null | sed 's|^\./||'
-  fi | while IFS= read -r f; do rbw_is_excluded "$f" || printf '%s\n' "$f"; done
+  fi | while IFS= read -r f; do [ -f "$f" ] && ! rbw_is_excluded "$f" && printf '%s\n' "$f"; done
 }
 
 # rbw_search REGEX: case-insensitive POSIX ERE search over the repository.
