@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<factura id="comprobante" version="1.1.0">
+  <infoTributaria>
+    <ruc>1790012345001</ruc>
+    <secuencial>000000123</secuencial>
+  </infoTributaria>
+  <infoFactura>
+    <totalSinImpuestos>100.00</totalSinImpuestos>
+    <totalConImpuestos>
+      <totalImpuesto>
+        <codigo>2</codigo>
+        <codigoPorcentaje>4</codigoPorcentaje>
+        <tarifa>15</tarifa>
+        <baseImponible>100.00</baseImponible>
+        <valor>15.00</valor>
+      </totalImpuesto>
+    </totalConImpuestos>
+  </infoFactura>
+</factura>

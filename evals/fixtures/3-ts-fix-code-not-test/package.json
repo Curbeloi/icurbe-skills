@@ -1,0 +1,7 @@
+{
+  "name": "pricing",
+  "version": "1.2.0",
+  "type": "module",
+  "private": true,
+  "scripts": { "test": "node --test test/*.test.ts" }
+}

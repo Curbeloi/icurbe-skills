@@ -1,0 +1,75 @@
+{
+  "skill_name": "reuse-before-write",
+  "notes": "Fixtures live in the repository at evals/fixtures/<fixture>/ (outside the skill so installs stay small). Run them with evals/run.sh; the programmatic checks are in evals/checks/<id>.sh. Prompts never name the skill: activation is part of what is tested. Baseline = systematic-debugging only; with_skill = systematic-debugging + reuse-before-write.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "reuse-existing-formatter",
+      "fixture": "1-ts-reuse-format-currency",
+      "prompt": "Muestra el total de la factura formateado en dólares en la vista de la factura.",
+      "expected_output": "Reuses formatCurrency from src/utils/money.ts in renderInvoice; does not create a new currency formatter or add a dependency.",
+      "files": [],
+      "expectations": [
+        "src/views/invoiceView.ts calls formatCurrency",
+        "No new function, constant or file that formats money is added outside src/utils/money.ts",
+        "No dependency is added to package.json",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "root-cause-not-null-guard",
+      "fixture": "2-php-root-cause-iva-null",
+      "prompt": "Al calcular el total de samples/factura-001.xml revienta con un error de null en calcularIVA. Arréglalo.",
+      "expected_output": "Identifies that FacturaParser reads <tarifaIva> while the XML has <tarifa>, fixes the parser, and does not add a null guard or default (?? 0) in calcularIVA or TotalService.",
+      "files": [],
+      "expectations": [
+        "src/Xml/FacturaParser.php is changed to read the node the XML actually has",
+        "No null coalescing, null check or default value is added in IvaCalculator.php or TotalService.php",
+        "php tests/run.php passes and bin/total.php prints a total of 115.00",
+        "The final message states the root cause"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "fix-code-not-test",
+      "fixture": "3-ts-fix-code-not-test",
+      "prompt": "Los tests de descuentos están en rojo (npm test). Ponlos en verde.",
+      "expected_output": "Fixes applyDiscount (subtracts the rate instead of multiplying) and leaves the test file untouched.",
+      "files": [],
+      "expectations": [
+        "test/discount.test.ts is unchanged",
+        "src/discount.ts is changed",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "existing-duplicates-reported",
+      "fixture": "4-php-unify-ruc-cedula",
+      "prompt": "Agrega la validación de cédula ecuatoriana al formulario de clientes (tipo_identificacion = 'cedula').",
+      "expected_output": "Notices that RucValidator::validarRuc and SupplierForm::rucValido are near copies of the same check-digit algorithm; either proposes unifying them before implementing, or implements the cédula check on top of a shared/extracted check-digit function and reports the duplicate. Does not add a third copy of the loop.",
+      "files": [],
+      "expectations": [
+        "The final message mentions the duplicated RUC validation (SupplierForm / rucValido)",
+        "No third copy of the modulo-10 check-digit loop is added",
+        "Either the cédula validation works in CustomerForm, or the agent stopped to propose unifying the duplicates first",
+        "The existing tests still pass"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "legit-new-code-without-friction",
+      "fixture": "5-ts-legit-new-csv",
+      "prompt": "Agrega una exportación a CSV del reporte de ventas.",
+      "expected_output": "Searches, finds nothing for CSV, creates a small exporter on top of buildSalesReport/ReportRow with a one-line justification, adds no dependency, and does not stall asking for permission.",
+      "files": [],
+      "expectations": [
+        "A CSV exporter is implemented (the change is not empty)",
+        "The exporter builds on buildSalesReport or ReportRow instead of re-aggregating sales",
+        "No dependency is added to package.json",
+        "The test suite passes"
+      ]
+    }
+  ]
+}
