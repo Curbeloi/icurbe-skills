@@ -40,10 +40,20 @@ from obra/superpowers. Install both, in this order:
 npx skills add obra/superpowers --skill systematic-debugging
 
 # 2. Reuse-first guardrail + diff audit (complement)
-npx skills add Curbeloi/skills --skill reuse-before-write
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write
 ```
 
-Add `-g` to install them for your user instead of the current project.
+Add `-g` to install them for your user instead of the current project. To install without prompts
+and only for the agents you use, add `-y` and `-a`:
+
+```bash
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write -g -y -a claude-code
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write -g -y -a claude-code,codex,cursor
+```
+
+Without `-a`, `-y` installs for every agent the installer knows, and some of them only support
+project installs: `PromptScript does not support global skill installation` is expected with `-g`
+and harmless. Update later with `npx skills update`.
 
 ### How the work is split
 
@@ -153,10 +163,20 @@ de obra/superpowers. Instala los dos, en este orden:
 npx skills add obra/superpowers --skill systematic-debugging
 
 # 2. Reutilizar antes de escribir + auditoría del diff (complemento)
-npx skills add Curbeloi/skills --skill reuse-before-write
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write
 ```
 
-Añade `-g` para instalarlos a nivel de usuario en lugar del proyecto actual.
+Añade `-g` para instalarlos a nivel de usuario en lugar del proyecto actual. Para instalar sin
+preguntas y solo para los agentes que usas, añade `-y` y `-a`:
+
+```bash
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write -g -y -a claude-code
+npx skills add Curbeloi/icurbe-skills --skill reuse-before-write -g -y -a claude-code,codex,cursor
+```
+
+Sin `-a`, `-y` instala para todos los agentes que conoce el instalador, y algunos solo admiten
+instalación por proyecto: con `-g` es normal ver `PromptScript does not support global skill
+installation`, y no afecta al resto. Para actualizar después: `npx skills update`.
 
 ### Cómo se reparten el trabajo
 
