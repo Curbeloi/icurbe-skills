@@ -1,6 +1,6 @@
 {
   "skill_name": "reuse-before-write",
-  "notes": "Fixtures live in the repository at evals/fixtures/<fixture>/ (outside the skill so installs stay small). Run them with evals/run.sh; the programmatic checks are in evals/checks/<id>.sh. Prompts never name the skill: activation is part of what is tested. Baseline = systematic-debugging only; with_skill = systematic-debugging + reuse-before-write.",
+  "notes": "Cases 1-5 are TypeScript/PHP, 6-10 the same five scenarios in Python. Fixtures live in the repository at evals/fixtures/<fixture>/ (outside the skill so installs stay small). Run them with evals/run.sh; the programmatic checks are in evals/checks/<id>.sh. Prompts never name the skill: activation is part of what is tested. Baseline = systematic-debugging only; with_skill = systematic-debugging + reuse-before-write.",
   "evals": [
     {
       "id": 1,
@@ -68,6 +68,76 @@
         "A CSV exporter is implemented (the change is not empty)",
         "The exporter builds on buildSalesReport or ReportRow instead of re-aggregating sales",
         "No dependency is added to package.json",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "py-reuse-existing-helper",
+      "fixture": "6-py-reuse-business-days",
+      "prompt": "En el reporte de pedidos atrasados agrega cuántos días hábiles de retraso tuvo cada pedido.",
+      "expected_output": "Reuses business_days_between from app/utils/dates.py in late_orders; no new weekday loop and no new dependency (holidays, workalendar, numpy, pandas).",
+      "files": [],
+      "expectations": [
+        "app/orders/report.py calls business_days_between",
+        "No new weekday/timedelta loop outside app/utils/dates.py",
+        "No dependency added",
+        "Order A1 (promised Mon 2026-03-02, delivered Mon 2026-03-09) reports 5 business days late",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "py-root-cause-not-none-guard",
+      "fixture": "7-py-root-cause-csv-bom",
+      "prompt": "Al importar samples/clientes.csv revienta send_welcome con AttributeError: 'NoneType' object has no attribute 'lower'. Arréglalo.",
+      "expected_output": "Finds that the CSV starts with a UTF-8 BOM, so the first header is '\\ufeffemail' and row.get('email') is None; opens the file with encoding='utf-8-sig' in the importer and adds no None guard, default or try/except in send_welcome.",
+      "files": [],
+      "expectations": [
+        "The importer handles the BOM (utf-8-sig or stripping \\ufeff)",
+        "No None guard, default or try/except added in app/notifications/welcome.py",
+        "The test suite passes and the CLI sends 2 welcomes",
+        "The final message states the root cause (BOM / encoding)"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "py-fix-code-not-test",
+      "fixture": "8-py-fix-code-not-test",
+      "prompt": "Los tests están fallando (python3 -m unittest). Ponlos en verde.",
+      "expected_output": "Fixes the off-by-one in paginate (pages are 1-based) and leaves the tests untouched.",
+      "files": [],
+      "expectations": [
+        "tests/ is unchanged",
+        "app/pagination.py is changed",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "py-existing-duplicates-reported",
+      "fixture": "9-py-unify-phone",
+      "prompt": "Normaliza también el teléfono en el alta de proveedores (app/suppliers/service.py).",
+      "expected_output": "Notices that customers._normalize_phone and leads.clean_phone are near copies; unifies them (or proposes it first) and does not add a third copy for suppliers.",
+      "files": [],
+      "expectations": [
+        "The final message mentions the duplicated phone normalization (leads / clean_phone)",
+        "No third copy of the normalization (files under app/ with the +593 rule: at most 2)",
+        "create_supplier normalizes the phone, or the agent stopped to propose unifying first",
+        "The test suite passes"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "py-legit-new-code-stdlib",
+      "fixture": "10-py-legit-new-csv",
+      "prompt": "Agrega una exportación a CSV del reporte de ventas.",
+      "expected_output": "Creates a small exporter with the stdlib csv module on top of build_sales_report/ReportRow; adds no dependency (no pandas) and does not stall asking for permission.",
+      "files": [],
+      "expectations": [
+        "A CSV exporter is implemented",
+        "The exporter builds on build_sales_report or ReportRow",
+        "No dependency added (requirements.txt unchanged, no pandas import)",
         "The test suite passes"
       ]
     }

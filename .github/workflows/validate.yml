@@ -36,3 +36,11 @@ jobs:
           echo 'export const toDollars = (n: number) => { try { return "$" + n } catch (e) {} };' > src/utils/dollars.ts
           bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
           grep -q 'RED' audit.txt
+      - name: Scripts smoke test (Python)
+        run: |
+          cd evals/fixtures/9-py-unify-phone
+          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
+          bash ../../../skills/reuse-before-write/scripts/find-similar.sh phone | grep -q _normalize_phone
+          printf 'def f(x):\n    try:\n        return int(x)\n    except ValueError:\n        pass\n' >> app/suppliers/service.py
+          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
+          grep -q 'empty catch/except' audit.txt

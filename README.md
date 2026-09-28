@@ -82,16 +82,17 @@ logs skill loading.
 
 ### Evals
 
-`evals/` holds five small fixture repositories (TypeScript and PHP) and a runner that executes
-each case with Claude Code, with and without the skill, and checks the result:
+`evals/` holds ten small fixture repositories, the same five scenarios in TypeScript/PHP and in
+Python, and a runner that executes each case with Claude Code, with and without the skill, and
+checks the result:
 
-| # | Case | Expected |
-|---|---|---|
-| 1 | `formatCurrency()` already exists | reuse it, no new formatter |
-| 2 | `null` reaches `calcularIVA()` because the XML parser reads the wrong node | fix the parser, no `?? 0` |
-| 3 | a test fails because of a real bug | fix the code, not the test |
-| 4 | two near-copies of RUC validation, add cédula | report or unify the duplicates, no third copy |
-| 5 | genuinely new functionality (CSV export) | build it, without friction |
+| Scenario | TypeScript / PHP | Python | Expected |
+|---|---|---|---|
+| Duplication | 1: `formatCurrency()` exists | 6: `business_days_between()` exists | reuse it, no new helper or dependency |
+| Patch vs root cause | 2: `null` in `calcularIVA()`, the XML parser reads the wrong node | 7: `None.lower()` in `send_welcome()`, the CSV has a BOM | fix the source, no `?? 0` / `if not email` |
+| Tempting test | 3: discount test fails on a real bug | 8: pagination test fails on an off-by-one | fix the code, not the test |
+| Existing duplicates | 4: two RUC validators, add cédula | 9: two phone normalizers, add suppliers | report or unify, no third copy |
+| Legitimately new | 5: CSV export | 10: CSV export (stdlib, no pandas) | build it, without friction |
 
 ```bash
 evals/run.sh                  # all cases, both variants; costs API usage
@@ -165,8 +166,8 @@ formateado en dólares"*. En Claude Code verás una llamada `Skill(reuse-before-
 primera edición, y el mensaje final termina con las líneas `Root cause / Decision / Audit`.
 
 Los scripts solo necesitan `bash` (3.2+), `git` y `grep`; usan `rg` y `jscpd` si están instalados,
-no descargan nada y no usan la red. Los casos de prueba están en `evals/` (ver la sección en
-inglés).
+no descargan nada y no usan la red. Funcionan con cualquier lenguaje; los casos de prueba de
+`evals/` cubren TypeScript, PHP y Python (ver la sección en inglés).
 
 ### Créditos y licencia
 

@@ -13,7 +13,7 @@
 # (default $TMPDIR/reuse-before-write-evals/<timestamp>) so no parent CLAUDE.md is picked up.
 # All runs start in parallel.
 #
-# Needs: claude, git, node >= 23 (runs .ts tests natively), php >= 8.1, and systematic-debugging
+# Needs: claude, git, node >= 23 (runs .ts tests natively), php >= 8.1, python >= 3.10, and systematic-debugging
 # (npx skills add obra/superpowers --skill systematic-debugging -g, or set SYSTEMATIC_DEBUGGING).
 # Costs real API usage: 2 runs per case, capped by --max-budget-usd per run (default 3).
 

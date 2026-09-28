@@ -9,3 +9,4 @@ check() { if [ "$2" = 0 ]; then ok "$1" "$3"; else bad "$1" "$3"; fi; }
 # Lines added to FILE(S) since the fixture commit (untracked files count as added).
 added() { git add -A -N . >/dev/null 2>&1; git diff "$BASE_REF" -U0 -- "$@" | grep -E '^\+[^+]' | cut -c2-; }
 node_tests() { node --test test/*.test.ts >/tmp/rbw-eval-node.$$ 2>&1; r=$?; tail -n 8 /tmp/rbw-eval-node.$$ | grep -E '^ℹ (pass|fail)' | tr '\n' ' '; rm -f /tmp/rbw-eval-node.$$; return $r; }
+py_tests() { python3 -m unittest >/tmp/rbw-eval-py.$$ 2>&1; r=$?; tail -n 1 /tmp/rbw-eval-py.$$; rm -f /tmp/rbw-eval-py.$$; find . -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null; return $r; }

@@ -91,7 +91,11 @@ for term in "$@"; do
   cut -f1 "$TMP/mention.raw" | rbw_split_words > "$TMP/mention.words"
   paste "$TMP/mention.raw" "$TMP/mention.words" | match_words "$words" 3 \
     | awk -F'\t' 'FILENAME != "-" { seen[$2] = 1; next }
-                   !($1 in seen) { n[$1]++; if (!($1 in at)) at[$1] = $2 }
+                   !($1 in seen) {
+                     n[$1]++; split($2, a, ":"); doc = (a[1] ~ /\.(md|mdx|txt|rst|env|example|ya?ml|json|toml|ini|cfg|lock)$/)
+                     # Prefer a code location over docs and config as the example.
+                     if (!($1 in at) || (atdoc[$1] && !doc)) { at[$1] = $2; atdoc[$1] = doc }
+                   }
                    END { for (k in n) printf "%d\t%s\t%s\n", n[k], k, at[k] }' "$TMP/hit.defs" - \
     | sort -t "$(printf '\t')" -k1,1nr -k2,2 > "$TMP/hit.mentions"
   nd=$(wc -l < "$TMP/hit.defs" | tr -d ' ')

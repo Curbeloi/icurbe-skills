@@ -104,14 +104,16 @@ awk -F'\t' '{ print $1 ":" $2 ":" $3 }' "$TMP/added.code" \
 if [ ! -s "$TMP/newdefs" ]; then
   echo "  none"
 else
-  rbw_search "$RBW_DEF_RE" | rbw_extract_defs | awk -F'\t' '{ split($2, a, ":") } a[1] !~ ENVIRON["TEST_RE"]' | sort -u > "$TMP/alldefs"
+  rbw_search "$RBW_DEF_RE" | rbw_extract_defs \
+    | awk -F'\t' '{ split($2, a, ":") } a[1] !~ ENVIRON["TEST_RE"] && a[1] !~ /\.(md|mdx|txt|rst|json|ya?ml|toml|xml|csv|html?|lock)$/' \
+    | sort -u > "$TMP/alldefs"
   cut -f1 "$TMP/alldefs" | rbw_split_words > "$TMP/alldefs.w"; paste "$TMP/alldefs" "$TMP/alldefs.w" > "$TMP/alldefs.idx"
   cut -f1 "$TMP/newdefs" | rbw_split_words > "$TMP/newdefs.w"; paste "$TMP/newdefs" "$TMP/newdefs.w" > "$TMP/newdefs.idx"
   # For each new definition: the same name elsewhere (score 999), or a name that shares at least
   # half of its meaningful words (score = percentage). Generic words do not count as meaningful.
   awk -F'\t' "$RBW_AWK_STEM"'
     BEGIN {
-      split("get set is has to from with by of for and the new old do on in at as data value values item items info util utils helper helpers impl base default main init handle handler make run process test tests spec it use props prop type types state context provider component options option config params param args result response request action event dialog modal button view page list hook dto interface model models service services controller manager factory builder wrapper internal", sw, " ")
+      split("get set is has to from with by of for and the new old do on in at as data value values item items info util utils helper helpers impl base default main init handle handler make run process test tests spec it use props prop type types state context provider component options option config params param args result response request action event dialog modal button view page list hook dto interface model models service services controller manager factory builder wrapper internal without within into over after before all any one not", sw, " ")
       for (i in sw) stop[sw[i]] = 1
     }
     function sig(words, out,   k, i, w, c) {
@@ -134,7 +136,9 @@ else
         shared = 0
         for (a = 1; a <= nw[j]; a++) for (b = 1; b <= m; b++) if (index(ow[b], word[j, a]) == 1) { shared++; break }
         big = (nw[j] > m) ? nw[j] : m
-        # One shared word is at most a weak match: EventBlock is not BlockAction.
+        # One shared word is at most a weak match, and only when it heads both names:
+        # validarCedula ~ validarRuc, _clip_notes ~ _clip; but EventBlock is not BlockAction.
+        if (shared == 1 && index(ow[1], word[j, 1]) != 1) continue
         if (shared * 2 >= big) print name[j] "\t" loc[j] "\t" (shared == 1 ? 50 : int(100 * shared / big)) "\t" $1 "\t" $2
       }
     }' "$TMP/newdefs.idx" "$TMP/alldefs.idx" | sort -t "$(printf '\t')" -k1,1 -k3,3nr > "$TMP/similar"
@@ -176,9 +180,13 @@ awk -F'\t' '
   function show(kind) { printf "%s\t%s:%s\t%s\n", kind, $1, $2, substr(t, 1, 110) }
   {
     t = $3; sub(/^[[:space:]]+/, "", t)
+    # Python/Ruby: a handler whose only body is pass/.../nil on the next line swallows the error.
+    prev_handler = (pf == $1 && pl + 1 == $2 && pt ~ /^(except([^A-Za-z0-9_].*)?|rescue.*|\}?[[:space:]]*catch.*\{)[[:space:]]*:?[[:space:]]*$/)
+    pf = $1; pl = $2; pt = t
+    if (prev_handler && t ~ /^(pass|\.\.\.|nil|\}|continue)[[:space:]]*(#.*)?$/) { show("EMPTY"); next }
     if (t ~ /^(\/\/|#|\*|\/\*|<!--)/ && t !~ /(@ts-ignore|@ts-expect-error|eslint-disable|noqa|type: *ignore|phpcs:ignore|phpstan-ignore|NOSONAR|nolint)/) next
     if (t ~ /catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}/ || t ~ /except[^:]*:[[:space:]]*(pass|\.\.\.)[[:space:]]*$/ || t ~ /rescue[[:space:]]+nil/) { show("EMPTY"); next }
-    if (t ~ /(@ts-ignore|@ts-expect-error|eslint-disable|# *noqa|type: *ignore|#\[allow\(|@SuppressWarnings|phpcs:ignore|@phpstan-ignore|NOSONAR|nolint)/) { show("suppress"); next }
+    if (t ~ /(@ts-ignore|@ts-expect-error|eslint-disable|# *noqa|type: *ignore|#\[allow\(|@SuppressWarnings|phpcs:ignore|@phpstan-ignore|NOSONAR|nolint|pylint: *disable|suppress\()/) { show("suppress"); next }
     if ($1 ~ /\.php$/ && t ~ /(^|[^A-Za-z0-9_"'\''])@(new[[:space:]]|[$a-zA-Z_\\]+[[:space:]]*\()/) { show("suppress"); next }
     if (t ~ /(^|[^A-Za-z0-9_])(try|catch|except|rescue)([^A-Za-z0-9_]|$)/) { show("try/catch"); next }
     if (t ~ /\?\?|\|\|[[:space:]]*(""|'\'''\''|0|\[\]|\{\}|null|undefined|false|-1)|unwrap_or|\.ok\(\)|[[:space:]]or[[:space:]]+(None|0|""|'\'''\''|\[\]|\{\})|\.get\([^,()]+,[^)]+\)|getOrDefault|orElse\(/) { show("fallback"); next }
