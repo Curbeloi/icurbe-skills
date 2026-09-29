@@ -86,9 +86,10 @@ The goal is to learn what already exists before deciding what is missing.
    new one and beats hand-written code.
 6. **Find the callers** of the code you are about to touch (`grep -rn "symbolName("`, or your
    editor's references). Callers tell you what must keep working and how wide the blast radius is.
-7. **Write the recon report** in the format of `references/recon-report-template.md`: what
-   exists, where, whether it is reusable, what **overlaps** with the behaviour you are about to
-   build, and what is really missing. Keep it short. It is a decision record, not an essay.
+7. **Write the recon report** in your reply to the user (never as a file in the repository), in
+   the format of `references/recon-report-template.md`: what exists, where, whether it is
+   reusable, what **overlaps** with the behaviour you are about to build, and what is really
+   missing. Keep it short. It is a decision record, not an essay.
 
 Why the report: writing "Found: `src/utils/money.ts:formatCurrency` (reusable: yes)" makes it
 hard to then write a second currency formatter. The report is how the recon changes the code.

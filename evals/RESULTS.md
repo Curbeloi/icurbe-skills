@@ -44,9 +44,47 @@ swallowed error; `contextlib.suppress` and `pylint: disable` count as suppressio
 Next step to measure the effect on strong models: larger fixtures, where the helper to reuse is not
 in the first files an agent opens.
 
-Added after these runs, not measured yet: case 11 (feature overlap in a ~30-file TypeScript
-repository: an outbox with templates, opt-out and retries already sends email), `run.sh --repeat`,
-and three audit signals aimed at overlapping features rather than copied names: new code that
-calls the same uncommon operations as existing code, new calls into another module's internals,
-and copies with renamed variables. On a hand-written third copy of the case 4 check digit with
-every variable renamed, the audit now reports RED; before, it only showed a weak name match.
+## 2026-09-29: duplicates and overlap on Haiku 4.5, three runs each
+
+Claude Code 2.1.284, `evals/run.sh --only 4,9,11 --repeat 3 --model claude-haiku-4-5-20251001`:
+18 runs, $2.69. These runs exposed a bug in the audit (below); case 4 `with_skill` was run three
+more times with the fix, $0.50.
+
+| Case | Variant | Checks passed | Skill activated | Kept a duplicate |
+|---|---|---|---|---|
+| 4: two RUC validators, add cédula (PHP) | baseline | 6/12 | – | 3/3 |
+| | with_skill | 6/12 | 2/3 | 3/3 |
+| | with_skill, audit fixed | 7/12 | 2/3 | 2/3 |
+| 9: two phone normalizers, add suppliers (Python) | baseline | 7/12 | – | 2/3 |
+| | with_skill | 10/12 | 2/3 | 2/3 |
+| 11: an outbox already sends email (TypeScript) | baseline | 12/12 | – | 0/3 |
+| | with_skill | 12/12 | 3/3 | 0/3 |
+
+What the nine `with_skill` runs of cases 4 and 9 did with the duplicate, by what the audit showed:
+
+| The audit showed the copy as | Runs | Copy removed |
+|---|---|---|
+| RED | 3 | 2 (extracted a shared validator; imported the existing normalizer) |
+| YELLOW only | 3 | 0 ("it is the standard algorithm", "same pattern as the project") |
+| skill not activated | 3 | 0 |
+
+- **A RED copy item changes what the model does; a YELLOW one does not.** Twice the model fixed
+  the copy after the RED and re-ran the audit, which no longer reported a copy. The third time it called the
+  copy "intentional, consistent with the architecture" (the fixture has a comment saying `leads`
+  copies the rule on purpose). Every YELLOW was justified away.
+- **Bug found:** a copy with a few identical lines and a renamed rest was reported only as
+  "4 added lines already exist" (YELLOW): the renamed-copy RED was dropped for pairs already
+  reported as identical. Now there is one line per pair of files with the stronger signal, and
+  identical lines around a renamed block longer than one window are RED. Both Haiku copies are
+  regression tests (`tests/cases/4-haiku-*.sh`).
+- Case 9: the final message named the existing copies in 3/3 `with_skill` runs (one of them
+  without the skill activating) and in 0/3 baseline runs. Case 4: in no run, either variant.
+- **Case 11 does not separate the variants on Haiku either**: all six runs queued the email
+  through the outbox. A bigger repository, or a transport that looks like the obvious API, is
+  needed to test feature overlap.
+- One run saved the recon report as `RECON.md` in the repository; SKILL.md now says it goes in
+  the reply.
+- What this does not show: three runs per cell, activation at 2/3 on Haiku, one model.
+
+A possible next step, not measured: a RED copy item that the model may not close with a
+justification alone (fix it, or stop and ask the user).

@@ -1,6 +1,7 @@
 # Recon report template
 
-Write this before Phase 3. One line per item; drop fields that do not apply.
+Write this in your reply before Phase 3, not in a file. One line per item; drop fields that do
+not apply.
 
 ```markdown
 ## Recon

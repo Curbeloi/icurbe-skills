@@ -479,31 +479,48 @@ if [ -s "$TMP/shingles" ]; then
       }
     }' "$TMP/shingles" "$TMP/added.code" 2>/dev/null > "$TMP/shseen"
   # Drop boilerplate shingles (in more than 3 files), then count, per changed file and source
-  # file, how many added tokens are covered by a matching shingle. Pairs already reported as
-  # verbatim copies are skipped.
+  # file, how many added tokens are covered by a matching shingle.
   awk -F'\t' -v K="$SHINGLE" '
-    FILENAME == ARGV[1] { reported[$2 "\t" $3] = 1; next }
-    FILENAME == ARGV[2] { if (!(($1, $2) in f)) { f[$1, $2] = 1; nf[$1]++; src[$1] = src[$1] "\n" $2 } next }
+    FILENAME == ARGV[1] { if (!(($1, $2) in f)) { f[$1, $2] = 1; nf[$1]++; src[$1] = src[$1] "\n" $2 } next }
     ($1 in nf) && nf[$1] <= 3 {
       m = split(src[$1], s, "\n")
       for (x = 2; x <= m; x++) {
-        pr = $2 "\t" s[x]; if (pr in reported) continue
+        pr = $2 "\t" s[x]
         for (i = $3 - K + 1; i <= $3; i++) if (!((pr, i) in cov)) { cov[pr, i] = 1; ntok[pr]++ }
       }
     }
-    END { for (pr in ntok) print ntok[pr] "\t" pr }' "$TMP/copied" "$TMP/shseen" "$TMP/shingles" \
+    END { for (pr in ntok) print ntok[pr] "\t" pr }' "$TMP/shseen" "$TMP/shingles" \
     | sort -t "$(printf '\t')" -k1,1nr > "$TMP/renamed"
 fi
 touch "$TMP/renamed"
-if [ -s "$TMP/copied" ] || [ -s "$TMP/renamed" ]; then
-  while IFS="$(printf '\t')" read -r n changed from; do
-    msg="$changed: $n added lines already exist in $from; extract the shared code and call it from both"
-    if [ "$n" -ge 6 ]; then red "$msg"; else yellow "$msg"; fi
-  done < "$TMP/copied"
-  while IFS="$(printf '\t')" read -r n changed from; do
-    msg="$changed: about $n tokens of added code have the same structure as code in $from (names changed); extract the shared code and call it from both"
-    if [ "$n" -ge $((SHINGLE * 2)) ]; then red "$msg"; else yellow "$msg"; fi
-  done < "$TMP/renamed"
+# One line per pair of files. A copy usually has a few identical lines and a renamed rest, so
+# both signals are joined and the stronger one sets the colour; reporting only the identical
+# lines let a whole renamed algorithm pass as "4 lines in common".
+awk -F'\t' '
+  { k = $2 "\t" $3; if (!(k in seen)) { seen[k] = 1; order[++n] = k } }
+  FILENAME == ARGV[1] { same[k] = $1; next }
+  { renamed[k] = $1 }
+  END { for (i = 1; i <= n; i++) { k = order[i]; print same[k] + 0 "\t" renamed[k] + 0 "\t" k } }' \
+  "$TMP/copied" "$TMP/renamed" > "$TMP/copies"
+if [ -s "$TMP/copies" ]; then
+  while IFS="$(printf '\t')" read -r same renamed changed from; do
+    if [ "$renamed" -gt 0 ] && [ "$same" -gt 0 ]; then
+      msg="$changed: about $renamed tokens of added code have the same structure as code in $from (names changed), $same lines of it identical"
+    elif [ "$renamed" -gt 0 ]; then
+      msg="$changed: about $renamed tokens of added code have the same structure as code in $from (names changed)"
+    else
+      msg="$changed: $same added lines already exist in $from"
+    fi
+    msg="$msg; extract the shared code and call it from both"
+    # RED: many identical lines, a long renamed block, or both signals at once: a few identical
+    # lines around a renamed block longer than one window is how an algorithm gets copied and
+    # "adapted". One window alone (a shared query filter, say) stays YELLOW.
+    if [ "$same" -ge 6 ] || [ "$renamed" -ge $((SHINGLE * 2)) ] || { [ "$same" -ge 3 ] && [ "$renamed" -gt "$SHINGLE" ]; }; then
+      red "$msg"
+    else
+      yellow "$msg"
+    fi
+  done < "$TMP/copies"
 else
   echo "  none"
 fi
