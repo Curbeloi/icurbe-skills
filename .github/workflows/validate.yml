@@ -12,7 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
       - name: The installer lists the skill
         run: |
           npx -y skills add . --list 2>&1 | tee skills-list.txt
@@ -26,35 +30,7 @@ jobs:
           test ! -f SKILL.md || { echo "::error::no SKILL.md at the repository root"; exit 1; }
       - name: Shell scripts
         run: |
-          for f in skills/*/scripts/*.sh evals/run.sh evals/checks/*.sh; do bash -n "$f"; done
-          shellcheck -x -s bash skills/*/scripts/*.sh evals/run.sh evals/checks/*.sh
-      - name: Scripts smoke test
-        run: |
-          cd evals/fixtures/1-ts-reuse-format-currency
-          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
-          bash ../../../skills/reuse-before-write/scripts/find-similar.sh currency | grep -q formatCurrency
-          echo 'export const toDollars = (n: number) => { try { return "$" + n } catch (e) {} };' > src/utils/dollars.ts
-          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
-          grep -q 'RED' audit.txt
-      - name: Scripts smoke test (Python)
-        run: |
-          cd evals/fixtures/9-py-unify-phone
-          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
-          bash ../../../skills/reuse-before-write/scripts/find-similar.sh phone | grep -q _normalize_phone
-          printf 'def f(x):\n    try:\n        return int(x)\n    except ValueError:\n        pass\n' >> app/suppliers/service.py
-          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
-          grep -q 'empty catch/except' audit.txt
-      - name: Scripts smoke test (overlap and renamed copies)
-        run: |
-          cd evals/fixtures/11-ts-feature-overlap-notifications
-          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
-          printf '%s\n' 'import { smtpSend } from "../platform/outbox/transports/smtp.ts";' \
-            'export function sendShippedEmail(to: string, n: string) { return smtpSend("x@y.z", to, "Shipped", n); }' > src/orders/shippedEmail.ts
-          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
-          grep -q 'which until now only src/platform/outbox/ used' audit.txt
-          cd ../4-php-unify-ruc-cedula
-          git init -q && git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm fixture
-          perl -pe 's/RucValidator/CedulaValidator/; s/validarRuc/validarCedula/; s/\$ruc\b/\$id/g; s/\$suma\b/\$total/g; s/\$d\b/\$v/g; s/\$i\b/\$k/g; s/\$provincia\b/\$prov/g; s/\$verificador\b/\$dv/g' \
-            src/Validation/RucValidator.php > src/Validation/CedulaValidator.php
-          bash ../../../skills/reuse-before-write/scripts/audit-diff.sh | tee audit.txt
-          grep -Eq 'same structure as code in src/Validation/RucValidator.php|already exist in src/Validation/RucValidator.php' audit.txt
+          for f in skills/*/scripts/*.sh evals/*.sh evals/checks/*.sh tests/*.sh tests/cases/*.sh; do bash -n "$f"; done
+          shellcheck -x -s bash skills/*/scripts/*.sh evals/*.sh evals/checks/*.sh tests/*.sh tests/cases/*.sh
+      - name: Regression tests (audit and eval checks on the fixtures)
+        run: bash tests/run.sh

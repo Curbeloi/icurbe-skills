@@ -1,0 +1,4 @@
+# Cases set FIXTURE, CHECK and FINAL_MESSAGE, and lib.sh sets FAILED, for tests/run.sh to read
+# after sourcing them: SC2034 ("appears unused") does not apply.
+shell=bash
+disable=SC2034

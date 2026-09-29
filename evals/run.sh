@@ -21,6 +21,8 @@
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$ROOT/evals/lib.sh"
 SKILL="$ROOT/skills/reuse-before-write"
 EVALS="$SKILL/evals/evals.json"
 SD="${SYSTEMATIC_DEBUGGING:-$HOME/.claude/skills/systematic-debugging}"
@@ -55,13 +57,12 @@ run_case() {  # id name fixture prompt variant run
   local dir="$OUT/eval-$id-$name/$variant/run-$run" repo
   repo="$dir/repo"
   rm -rf "$dir"; mkdir -p "$dir"
-  cp -R "$ROOT/evals/fixtures/$fixture" "$repo"
+  fixture_copy "$fixture" "$repo"
   mkdir -p "$repo/.claude/skills"
   cp -R "$SD" "$repo/.claude/skills/systematic-debugging"
   [ "$variant" = with_skill ] && cp -R "$SKILL" "$repo/.claude/skills/reuse-before-write" \
     && rm -rf "$repo/.claude/skills/reuse-before-write/evals"
-  (cd "$repo" && git init -q && git add -A \
-    && git -c user.name=eval -c user.email=eval@localhost commit -qm fixture)
+  fixture_commit "$repo"
   # The agent may commit its own work; always compare against the fixture commit.
   local base_ref
   base_ref=$(git -C "$repo" rev-parse HEAD)
