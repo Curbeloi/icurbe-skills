@@ -1,6 +1,6 @@
 {
   "skill_name": "reuse-before-write",
-  "notes": "Cases 1-5 are TypeScript/PHP, 6-10 the same five scenarios in Python. Fixtures live in the repository at evals/fixtures/<fixture>/ (outside the skill so installs stay small). Run them with evals/run.sh; the programmatic checks are in evals/checks/<id>.sh. Prompts never name the skill: activation is part of what is tested. Baseline = systematic-debugging only; with_skill = systematic-debugging + reuse-before-write.",
+  "notes": "Cases 1-5 are TypeScript/PHP, 6-10 the same five scenarios in Python, 11 feature overlap in a larger TypeScript repository. Fixtures live in the repository at evals/fixtures/<fixture>/ (outside the skill so installs stay small). Run them with evals/run.sh; the programmatic checks are in evals/checks/<id>.sh. Prompts never name the skill: activation is part of what is tested. Baseline = systematic-debugging only; with_skill = systematic-debugging + reuse-before-write.",
   "evals": [
     {
       "id": 1,

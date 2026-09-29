@@ -8,6 +8,27 @@ bad()  { printf 'FAIL\t%s\t%s\n' "$1" "${2:-}"; }
 check() { if [ "$2" = 0 ]; then ok "$1" "$3"; else bad "$1" "$3"; fi; }
 # Lines added to FILE(S) since the fixture commit (untracked files count as added).
 added() { git add -A -N . >/dev/null 2>&1; git diff "$BASE_REF" -U0 -- "$@" | grep -E '^\+[^+]' | cut -c2-; }
+# added_matching REGEX [SKIP_RE] [-- PATHSPEC...]: added lines that match REGEX (extended,
+# case-insensitive; comment lines ignored), as "path: line", in the changed files whose path
+# SKIP_RE does not match.
+added_matching() {
+  local re=$1 skip='^$' f
+  shift
+  if [ $# -gt 0 ] && [ "$1" != -- ]; then skip=$1; shift; fi
+  [ "${1:-}" = -- ] && shift
+  git add -A -N . >/dev/null 2>&1
+  git diff "$BASE_REF" --name-only -- "$@" | grep -Ev -- "$skip" | while IFS= read -r f; do
+    [ -f "$f" ] && added "$f" | grep -Ev '^[[:space:]]*(//|#|/?\*)' | grep -Ei -- "$re" | sed "s|^|$f: |"
+  done
+}
+# new_dependencies MANIFEST...: the lines added to these dependency manifests.
+new_dependencies() { added "$@" 2>/dev/null | grep -Ei '[a-z]'; }
+# no_new_dependency LABEL MANIFEST...: checks that none of the manifests gained a line.
+no_new_dependency() {
+  local label=$1 deps
+  shift
+  deps=$(new_dependencies "$@"); [ -z "$deps" ]; check "$label" $? "$(printf '%s' "$deps" | head -n 3 | tr '\n' ' ')"
+}
 node_tests() {
   local log r
   log=$(mktemp "${TMPDIR:-/tmp}/rbw-eval-node.XXXXXX")
