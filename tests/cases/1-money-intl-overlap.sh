@@ -10,4 +10,5 @@ TS
 expect() {
   expect_line '^  \[yellow\] money2 \(src/views/totals.ts:1\) calls the same operations'
   expect_line '^      formatCurrency  src/utils/money.ts'
+  expect_line '^  \[yellow\] money2 \(src/views/totals.ts:1\) is not referenced anywhere else'
 }

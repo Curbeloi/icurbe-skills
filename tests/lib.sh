@@ -17,8 +17,9 @@ expect_no_line() {
 $hit"
 }
 
-# expect_summary GREEN|YELLOW|RED: the audit's overall verdict.
-expect_summary() { printf '%s\n' "$AUDIT_OUT" | grep -Eq "^  $1:" || missed "summary $1"; }
+# expect_summary GREEN|YELLOW|RED: the audit's overall verdict (in its summary, or the early
+# "GREEN: no changes to audit.").
+expect_summary() { printf '%s\n' "$AUDIT_OUT" | grep -Eq "^ *$1:" || missed "summary $1"; }
 
 expect_no_red() { expect_no_line '^  \[red\]'; }
 

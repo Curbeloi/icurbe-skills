@@ -21,4 +21,5 @@ TS
 expect() {
   expect_line '^  \[yellow\] sendShippingEmail .* calls smtpSend, which until now only src/platform/outbox/ used'
   expect_checks FFPP   # the opted-out customer gets the email too
+  expect_no_line 'sendShippingEmail .* is not referenced'   # orderStatus.ts calls it
 }

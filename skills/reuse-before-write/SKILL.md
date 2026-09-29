@@ -153,6 +153,10 @@ bash <skill-dir>/scripts/audit-diff.sh          # working tree + untracked vs HE
 bash <skill-dir>/scripts/audit-diff.sh main     # or against a base ref
 ```
 
+Both scripts skip dependencies, build output and test data (`fixtures/`, `testdata/`,
+`__snapshots__/`), plus any path listed in `.reuse-before-write-ignore` at the repository root
+or in `RBW_EXCLUDE` (a prefix like `legacy/` or a glob like `*.pb.go`).
+
 It lists new files; new definitions that repeat within the change, share a name with existing
 code, or look like it (`(weak)` = one word in common); new symbols nothing references; added
 `try/catch`, fallbacks and suppressions; touched tests (removed assertions, skips); manifest

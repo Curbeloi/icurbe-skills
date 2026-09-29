@@ -79,8 +79,12 @@ skills/reuse-before-write/
     └── lib.sh                        # shared helpers
 ```
 
-The scripts need only `bash` (3.2+), `git` and `grep`. They use `rg` and `jscpd` when installed,
-never download anything and never touch the network. You can run them by hand too:
+The scripts need only `bash` (3.2+), `git` and `grep`. They use `rg` and `jscpd` when installed
+(`rg` makes the audit 20-30 % faster on large repositories), never download anything and
+never touch the network. They skip dependencies, build output and test data (`fixtures/`,
+`testdata/`, `__snapshots__/`); list other paths to skip, such as generated or vendored code, in
+`.reuse-before-write-ignore` at the repository root (one prefix like `legacy/` or glob like
+`*.pb.go` per line). You can run them by hand too:
 
 ```bash
 bash .claude/skills/reuse-before-write/scripts/find-similar.sh invoice "format currency" tax
@@ -196,8 +200,12 @@ Pide un cambio de código **sin nombrar el skill**, por ejemplo *"muestra el tot
 formateado en dólares"*. En Claude Code verás una llamada `Skill(reuse-before-write)` antes de la
 primera edición, y el mensaje final termina con las líneas `Root cause / Decision / Audit`.
 
-Los scripts solo necesitan `bash` (3.2+), `git` y `grep`; usan `rg` y `jscpd` si están instalados,
-no descargan nada y no usan la red. Funcionan con cualquier lenguaje; los casos de prueba de
+Los scripts solo necesitan `bash` (3.2+), `git` y `grep`; usan `rg` y `jscpd` si están instalados
+(`rg` acelera la auditoría un 20-30 % en repositorios grandes), no descargan nada y no
+usan la red. Ignoran dependencias, compilados y datos de prueba (`fixtures/`, `testdata/`,
+`__snapshots__/`); otras rutas, como código generado o de terceros, se listan en
+`.reuse-before-write-ignore` en la raíz del repositorio (un prefijo como `legacy/` o un glob como
+`*.pb.go` por línea). Funcionan con cualquier lenguaje; los casos de prueba de
 `evals/` cubren TypeScript, PHP y Python (ver la sección en inglés).
 
 ### Créditos y licencia

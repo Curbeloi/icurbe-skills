@@ -53,9 +53,7 @@ export MANIFEST_RE='(^|/)(package\.json|composer\.json|Cargo\.toml|requirements[
 git -c core.quotePath=false diff --name-status -M "$BASE" -- 2>/dev/null \
   | awk -F'\t' '{ s = substr($1, 1, 1); p = (s == "R" || s == "C") ? $3 : $2; print s "\t" p }' > "$TMP/status"
 git ls-files --others --exclude-standard 2>/dev/null | awk '{ print "A\t" $0 }' >> "$TMP/status"
-grep -v -E "$NOISE_RE" "$TMP/status" | while IFS="$(printf '\t')" read -r st p; do
-  rbw_is_excluded "$p" || printf '%s\t%s\n' "$st" "$p"
-done > "$TMP/status.f"
+grep -v -E "$NOISE_RE" "$TMP/status" | rbw_filter_paths 2 > "$TMP/status.f"
 
 # Added lines as path<TAB>line<TAB>text, deleted lines as path<TAB>text.
 git -c core.quotePath=false diff -U0 --no-color --no-ext-diff -M "$BASE" -- 2>/dev/null | awk -v add="$TMP/added" -v del="$TMP/deleted" '
@@ -151,6 +149,9 @@ else
     awk -F'\t' -v id="$id" '$1 == id { print "      " $2 }' "$TMP/newdefs" | cap
   done < "$TMP/selfdup"
 
+  # How often each new name appears anywhere (its definition counts once): one search for all.
+  cut -f1 "$TMP/newdefs" | sort -u > "$TMP/newids"
+  rbw_count_refs "$TMP/newids" > "$TMP/refs"
   count=0; quiet=0
   while IFS="$(printf '\t')" read -r id where; do
     exact=$(awk -F'\t' -v id="$id" '$1 == id && $3 == 999 { print "      " $5 }' "$TMP/similar" | head -n 3)
@@ -159,7 +160,7 @@ else
              if ($3 > 50 && strong < 3) { strong++; print "      " $4 "  " $5 }
              else if ($3 == 50 && !strong && !weak) { weak = 1; w = "      " $4 "  " $5 "  (weak)" }
            } END { if (!strong && weak) print w }' "$TMP/similar")
-    refs=$(rbw_search "(^|[^A-Za-z0-9_\$])$id([^A-Za-z0-9_\$]|\$)" | wc -l | tr -d ' ')
+    refs=$(awk -F'\t' -v id="$id" 'BEGIN { id = tolower(id); n = 0 } $2 == id { n = $1 } END { print n }' "$TMP/refs")
     if [ -z "$exact" ] && [ -z "$near" ] && [ "$refs" -gt 1 ]; then quiet=$((quiet + 1)); continue; fi
     count=$((count + 1)); [ "$count" -gt "$MAX_ITEMS" ] && { echo "  ... more new definitions not shown"; break; }
     if [ -n "$exact" ]; then
@@ -185,13 +186,16 @@ awk -F'\t' '
     pf = $1; pl = $2; pt = t
     if (prev_handler && t ~ /^(pass|\.\.\.|nil|\}|continue)[[:space:]]*(#.*)?$/) { show("EMPTY"); next }
     if (t ~ /^(\/\/|#|\*|\/\*|<!--)/ && t !~ /(@ts-ignore|@ts-expect-error|eslint-disable|noqa|type: *ignore|phpcs:ignore|phpstan-ignore|NOSONAR|nolint)/) next
-    if (t ~ /catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}/ || t ~ /except[^:]*:[[:space:]]*(pass|\.\.\.)[[:space:]]*$/ || t ~ /rescue[[:space:]]+nil/) { show("EMPTY"); next }
-    if (t ~ /(@ts-ignore|@ts-expect-error|eslint-disable|# *noqa|type: *ignore|#\[allow\(|@SuppressWarnings|phpcs:ignore|@phpstan-ignore|NOSONAR|nolint|pylint: *disable|suppress\()/) { show("suppress"); next }
-    if ($1 ~ /\.php$/ && t ~ /(^|[^A-Za-z0-9_"'\''])@(new[[:space:]]|[$a-zA-Z_\\]+[[:space:]]*\()/) { show("suppress"); next }
-    if (t ~ /(^|[^A-Za-z0-9_])(try|catch|except|rescue)([^A-Za-z0-9_]|$)/) { show("try/catch"); next }
-    if (t ~ /\?\?|\|\|[[:space:]]*(""|'\'''\''|0|\[\]|\{\}|null|undefined|false|-1)|unwrap_or|\.ok\(\)|[[:space:]]or[[:space:]]+(None|0|""|'\'''\''|\[\]|\{\})|\.get\([^,()]+,[^)]+\)|getOrDefault|orElse\(/) { show("fallback"); next }
-    if ($1 ~ /\.php$/ && t ~ /\?:/) { show("fallback"); next }
-    if (t ~ /(^|[^A-Za-z0-9_])(retry|retries|sleep|backoff)([^A-Za-z0-9_]|$)/) { show("retry"); next }
+    # Words inside string literals are not code ("catch", "??" in a message): a non-empty string
+    # becomes "S". An empty one stays "", so || "" still reads as a fallback and || "Untitled" not.
+    s = t; gsub(/"([^"\\]|\\.)+"/, "\"S\"", s); gsub(/'\''([^'\''\\]|\\.)+'\''/, "'\''S'\''", s); gsub(/`[^`]+`/, "`S`", s)
+    if (s ~ /catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}/ || s ~ /except[^:]*:[[:space:]]*(pass|\.\.\.)[[:space:]]*$/ || s ~ /rescue[[:space:]]+nil/) { show("EMPTY"); next }
+    if (s ~ /(@ts-ignore|@ts-expect-error|eslint-disable|# *noqa|type: *ignore|#\[allow\(|@SuppressWarnings|phpcs:ignore|@phpstan-ignore|NOSONAR|nolint|pylint: *disable|suppress\()/) { show("suppress"); next }
+    if ($1 ~ /\.php$/ && s ~ /(^|[^A-Za-z0-9_"'\''])@(new[[:space:]]|[$a-zA-Z_\\]+[[:space:]]*\()/) { show("suppress"); next }
+    if (s ~ /(^|[^A-Za-z0-9_])(try|catch|except|rescue)([^A-Za-z0-9_]|$)/) { show("try/catch"); next }
+    if (s ~ /\?\?|\|\|[[:space:]]*(""|'\'''\''|0|\[\]|\{\}|null|undefined|false|-1)|unwrap_or|\.ok\(\)|[[:space:]]or[[:space:]]+(None|0|""|'\'''\''|\[\]|\{\})|\.get\([^,()]+,[^)]+\)|getOrDefault|orElse\(/) { show("fallback"); next }
+    if ($1 ~ /\.php$/ && s ~ /\?:/) { show("fallback"); next }
+    if (s ~ /(^|[^A-Za-z0-9_])(retry|retries|sleep|backoff)([^A-Za-z0-9_]|$)/) { show("retry"); next }
   }' "$TMP/added.code" > "$TMP/fallbacks"
 if [ -s "$TMP/fallbacks" ]; then
   for k in EMPTY suppress try/catch fallback retry; do
@@ -261,6 +265,10 @@ else
     BEGIN {
       k = split("if for foreach while switch catch function return typeof sizeof elseif array list isset empty unset echo print match fn def class new await async super constructor require require_once include include_once use import from and or not in is lambda with assert expect describe it test push pop shift unshift map filter reduce forEach some every find findIndex includes indexOf join split slice splice concat keys values entries toString valueOf trim toLowerCase toUpperCase replace log error warn info debug then resolve reject String Number Boolean Array Object Promise Error Map Set Date parseInt parseFloat isNaN get set has add delete clear sort len str int float bool count strlen is_array is_string is_null in_array array_map array_filter array_keys array_values array_merge implode explode sprintf printf intval floatval strval trim json_encode json_decode range append extend format_string", w, " ")
       for (i = 1; i <= k; i++) skip[w[i]] = 1
+      # awk string builtins: every awk function calls them. Only as plain calls, so re.sub() in
+      # Python (a method) still counts.
+      k = split("sub gsub substr index length tolower toupper sprintf printf", w, " ")
+      for (i = 1; i <= k; i++) plain[w[i]] = 1
     }
     FILENAME == ARGV[1] { n = split($2, a, ":"); p = substr($2, 1, length($2) - length(a[n]) - 1); start[p, a[n]] = $1; next }
     FNR == 1 { cur = "" }
@@ -274,6 +282,7 @@ else
         sub(/[[:space:]]*\($/, "", tok)
         if (tok ~ /^\$/ || (tok in skip) || tok == name[cur]) continue
         if (before ~ /(\.|->|::)[[:space:]]*$/) tok = "." tok
+        else if (tok in plain) continue
         if ((cur, tok) in seen) continue
         seen[cur, tok] = 1; ops[cur] = ops[cur] " " tok
       }
