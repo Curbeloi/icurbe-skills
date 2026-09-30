@@ -40,4 +40,5 @@ PHP
 expect() {
   expect_line '^  \[red\] src/Validation/CedulaValidator.php: .*same structure as code in src/Validation/RucValidator.php'
   expect_checks PFPP
+  expect_line 'A RED copy is not a matter of justification'
 }

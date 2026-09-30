@@ -86,5 +86,40 @@ What the nine `with_skill` runs of cases 4 and 9 did with the duplicate, by what
   the reply.
 - What this does not show: three runs per cell, activation at 2/3 on Haiku, one model.
 
-A possible next step, not measured: a RED copy item that the model may not close with a
-justification alone (fix it, or stop and ask the user).
+## 2026-09-30: a RED copy is not a matter of justification
+
+SKILL.md Phase 4 now gives a RED copy (sections 7 and 8) two ways out only, remove it or stop and
+ask the user, and names the usual excuses ("the standard algorithm", "the project's pattern",
+"intentional duplication") as not being ways out; the audit prints the same rule under its
+summary when it reports a RED copy. Measured on the same two cases, `with_skill` only (the
+baseline does not read the skill): `evals/run.sh --only 4,9 --variants with_skill --repeat 4
+--model claude-haiku-4-5-20251001`, 8 runs, $1.29.
+
+| Case | Checks passed | Skill activated | Kept a duplicate |
+|---|---|---|---|
+| 4: two RUC validators, add cédula (PHP) | 12/16 | 4/4 | 1/4 (the run that stopped to ask, copy still in the tree) |
+| 9: two phone normalizers, add suppliers (Python) | 12/16 | 2/4 | 1/4 (the skill did not activate) |
+
+What the six activated runs did:
+
+| | Runs | Yesterday (6 activated runs) |
+|---|---|---|
+| Audit RED → removed the copy (extracted a shared validator, refactored `RucValidator`) | 2 | 2 |
+| Audit RED → stopped and asked the user, copy in the tree | 1 | 0 |
+| Audit RED or YELLOW → kept the copy with a justification | 0 | 4 |
+| Asked the user before writing anything (Phase 3) | 2 | 0 |
+| Reused the existing function, nothing to flag | 1 | 0 |
+
+- **No activated run justified a copy.** The one that kept it did so to ask ("¿prefieres que
+  refactorice ahora ... o que entregue como está con la duplicación documentada?"), which is what
+  the rule asks for when the fix crosses modules. In `claude -p` nobody answers, so that run
+  ends with the copy in place and the eval counts it as kept; with a person in the loop it is
+  the right stop.
+- Two runs asked before writing. One offered to unify (case 4, 4/4). The other (case 9)
+  recommended copying "as `leads` does" and asked; the eval counts that as a failure because it
+  neither implemented nor proposed unifying.
+- Activation is still the weak point: 2/4 on case 9; the run that copied had not loaded the
+  skill and described the paste as "using the same function that exists in customers".
+- What this does not show: one model, four runs per case, and yesterday's RED runs had the
+  audit bug for case 4 (so the "kept" column mixes YELLOW and RED). Whether the rule holds on
+  Opus, or when the user answers "keep the copy", is not measured.

@@ -185,10 +185,23 @@ checklist item is yours to answer. Then answer this checklist honestly:
 - [ ] **Dependencies**: did you add one that duplicates an installed one?
 - [ ] **Size**: is the diff the minimum needed for the task?
 
-If any answer is a problem, fix it before delivering. "It follows the same pattern" does not
-justify copied lines or a near-duplicate name: extract the shared code, or tell the user in the
-final summary that you copied it and why. See `references/anti-patterns.md` for
-before/after examples of each failure in PHP, TypeScript and Rust.
+If any answer is a problem, fix it before delivering.
+
+**A RED copy is not a matter of justification.** When the audit marks added code as RED in
+section 7 (lines that already exist, or the same structure with the names changed) or 8 (cloned
+blocks), there are exactly two ways out:
+
+1. **Remove the copy**: reuse the existing code, extend it, or extract the shared part into one
+   function and call it from both places (the old caller too). That is *extend*, not *create*.
+2. **Stop and ask the user** when removing it needs a refactor across modules or a public API,
+   showing the flagged pair, as Phase 3 says. Do this before delivering, not after.
+
+"It is the standard algorithm", "it follows the project's pattern", "the duplication is
+intentional" and "the modules must not import each other" are not ways out: they describe why
+the copy was made, not why it should stay. If the project really wants two copies, the user
+says so, not you. A near-duplicate name (YELLOW) is softer: reuse or unify, or say in the final
+summary why both exist. See `references/anti-patterns.md` for before/after examples of each
+failure in PHP, TypeScript and Rust.
 
 ## Final output to the user
 
@@ -200,6 +213,9 @@ Root cause: <one sentence, bugs only>
 Decision: reuse | extend | refactor | create: <one-line justification>
 Audit: <"clean", or the flagged items and what you did about them>
 ```
+
+`Audit: clean` is false while a RED copy is still in the tree; say what you extracted, or what
+you are asking the user.
 
 ## Red flags: stop and go back to Phase 1
 

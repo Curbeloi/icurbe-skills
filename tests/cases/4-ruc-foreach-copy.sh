@@ -16,5 +16,6 @@ final class CedulaValidator {
 PHP
 }
 expect() {
+  expect_no_line 'A RED copy is not a matter of justification'   # YELLOW: one signal under its threshold
   expect_line '^  \[(yellow|red)\] src/Validation/CedulaValidator.php: .*same structure as code in src/Validation/RucValidator.php'
 }

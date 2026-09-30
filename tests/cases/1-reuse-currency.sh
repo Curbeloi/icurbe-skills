@@ -8,6 +8,7 @@ change() {
 }
 expect() {
   expect_summary GREEN
+  expect_no_line 'A RED copy is not a matter of justification'
   expect_checks PPPP
   expect_found 'src/utils/money.ts:[0-9]+ +formatCurrency'   # by name
   expect_found 'NumberFormat +src/utils/money.ts'           # by behaviour: the primitive it would call

@@ -28,4 +28,5 @@ expect() {
   expect_line '^  \[red\] _clean_phone \(app/suppliers/service.py:[0-9]+\) calls the same operations'
   expect_line '^      _normalize_phone  app/customers/service.py'
   expect_checks PFPP
+  expect_no_line 'A RED copy is not a matter of justification'   # RED in section 6 (same operations), not a copy
 }

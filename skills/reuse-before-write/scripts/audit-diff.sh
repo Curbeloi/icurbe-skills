@@ -38,8 +38,10 @@ fi
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/rbw.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
-RED=0; YELLOW=0
+RED=0; YELLOW=0; RED_COPIES=0
 red()    { RED=$((RED + 1));       printf '  %s[red]%s %s\n' "$RBW_RED" "$RBW_OFF" "$1"; }
+# A RED copy (sections 7 and 8) is the one finding the checklist does not let you justify away.
+red_copy() { RED_COPIES=$((RED_COPIES + 1)); red "$1"; }
 yellow() { YELLOW=$((YELLOW + 1)); printf '  %s[yellow]%s %s\n' "$RBW_YEL" "$RBW_OFF" "$1"; }
 section() { printf '\n%s%s%s\n' "$RBW_BOLD" "$1" "$RBW_OFF"; }
 cap() { awk -v max="$MAX_ITEMS" 'NR <= max { print } END { if (NR > max) printf "    ... +%d more\n", NR - max }'; }
@@ -516,7 +518,7 @@ if [ -s "$TMP/copies" ]; then
     # lines around a renamed block longer than one window is how an algorithm gets copied and
     # "adapted". One window alone (a shared query filter, say) stays YELLOW.
     if [ "$same" -ge 6 ] || [ "$renamed" -ge $((SHINGLE * 2)) ] || { [ "$same" -ge 3 ] && [ "$renamed" -gt "$SHINGLE" ]; }; then
-      red "$msg"
+      red_copy "$msg"
     else
       yellow "$msg"
     fi
@@ -548,7 +550,7 @@ else
         /"end":/   { gsub(/[^0-9]/, ""); if (nm != "") { side[++k] = nm ":" st "-" $0; nm = "" } }
         END { for (i = 1; i + 1 <= k; i += 2) print side[i] "  ==  " side[i + 1] }' "$TMP/cpd/jscpd-report.json" > "$TMP/clones"
       if [ -s "$TMP/clones" ]; then
-        red "$(wc -l < "$TMP/clones" | tr -d ' ') duplicated block(s): parametrise instead of copying?"
+        red_copy "$(wc -l < "$TMP/clones" | tr -d ' ') duplicated block(s): parametrise instead of copying?"
         sed 's/^/      /' "$TMP/clones" | cap
       else
         echo "  no duplicated blocks"
@@ -567,6 +569,9 @@ elif [ "$YELLOW" -gt 0 ]; then
   printf '  %sYELLOW%s: %s item(s) to justify.\n' "$RBW_YEL" "$RBW_OFF" "$YELLOW"
 else
   printf '  %sGREEN%s: nothing flagged.\n' "$RBW_GRN" "$RBW_OFF"
+fi
+if [ "$RED_COPIES" -gt 0 ]; then
+  printf '  %sA RED copy is not a matter of justification%s: extract the shared code and call it from both places, or stop and ask the user before delivering.\n' "$RBW_BOLD" "$RBW_OFF"
 fi
 echo "  Answer the Phase 4 checklist in SKILL.md for every flagged item; dead code and diff size need your judgement."
 exit 0
